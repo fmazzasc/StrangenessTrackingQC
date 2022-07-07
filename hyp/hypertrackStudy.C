@@ -78,10 +78,13 @@ void hypertrackStudy()
     TH1D *hHyperCounter = new TH1D("Hypertrack counter", ";Hypertrack counter; Counts", 1, 0.5, 1.5);
     TH1D *hFakeAssocCounter = new TH1D("Fake assoc counter", ";Fake assoc counter; Counts", 1, 0.5, 1.5);
 
-    TH1D *hV0InvMass = new TH1D("v0_inv_mass", "; M ; Counts", 60, 2.96, 3.04);
-    TH1D *hStrTrackInvMass = new TH1D("strtrack_inv_mass", "; M ; Counts", 60, 2.96, 3.04);
+    TH1D *hV0InvMass = new TH1D("v0_inv_mass", "; M ; Counts", 120, 2.96, 3.04);
+    TH1D *hStrTrackInvMass = new TH1D("strtrack_inv_mass", "; M ; Counts", 120, 2.96, 3.04);
 
-    std::string path = "/data/fmazzasc/its_data/sim/hyp/";
+    TH1D *hV0InvMassForRes = new TH1D("v0_inv_mass_res_study", "; M ; Counts", 120, 2.96, 3.04);
+    TH1D *hTrackedInvMassForRes = new TH1D("strtrack_inv_mass_res_study", "; M ; Counts", 120, 2.96, 3.04);
+
+    std::string path = "/data/fmazzasc/its_data/sim/hyp_ab_new/";
     TSystemDirectory dir("MyDir", path.data());
     auto files = dir.GetListOfFiles();
     std::vector<std::string> dirs;
@@ -90,7 +93,7 @@ void hypertrackStudy()
     for (auto fileObj : *files)
     {
         std::string file = ((TSystemFile *)fileObj)->GetName();
-        if (file.substr(0, 2) == "tf")
+        if (file.substr(0, 3) == "tf5")
         {
             dirs.push_back(path + file);
             auto innerdir = (TSystemDirectory *)fileObj;
@@ -238,8 +241,11 @@ void hypertrackStudy()
             for (unsigned int iV0vec = 0; iV0vec < v0vec->size(); iV0vec++)
             {
                 hV0Counter->Fill(1);
+
                 auto &v0MCref = V0sMCref[iV0vec];
                 auto &v0 = (*v0vec)[iV0vec];
+
+                hV0InvMass->Fill(calcMass(v0));
 
                 if (v0MCref[0] == -1 || v0MCref[1] == -1)
                     continue;
@@ -251,6 +257,7 @@ void hypertrackStudy()
                 // Matching ITS tracks to MC tracks and V0
                 std::array<int, 2> ITSref = {-1, 1};
                 o2::its::TrackITS ITStrack;
+                int trackIdx{-1};
                 std::array<std::array<int, 2>, 7> clsRef;
 
                 int iTrack = -1;
@@ -328,6 +335,9 @@ void hypertrackStudy()
                     LOG(info) << "V0 pos: " << v0.getProngID(0) << " V0 neg: " << v0.getProngID(1) << " V0pt: " << v0.getPt() << " ITSpt: " << ITStrack.getPt();
                     LOG(info) << "V0 Eta: " << v0.getEta() << " V0 phi" << v0.getPhi() << " ITS eta: " << ITStrack.getEta() << " ITS phi: " << ITStrack.getPhi();
 
+                    LOG(info) << "V0 pos ref: " << v0.getProngID(0) << ", neg ref: " << v0.getProngID(1);
+                    LOG(info) << "ITS ref: " << iTrack;
+
                     LOG(info) << "Number of hits: " << ITStrack.getNClusters();
                     LOG(info) << "ITS Track ref: " << ITSref[0] << " " << ITSref[1] << " , PDG: " << mcTracksMatrix[ITSref[0]][ITSref[1]].GetPdgCode();
                     LOG(info) << "+++++++";
@@ -343,6 +353,8 @@ void hypertrackStudy()
                             if (clsRef[i][0] != ITSref[0])
                             {
                                 LOG(info) << "EvID mismatch: " << clsRef[i][0] << " " << ITSref[0];
+                                LOG(info) << "Cluster ref: " << clsRef[i][0] << " " << clsRef[i][1] << " , PDG: " << mcTracksMatrix[clsRef[i][0]][clsRef[i][1]].GetPdgCode();
+
                                 continue;
                             }
                             if (clsRef[i][1] != ITSref[1])
@@ -383,13 +395,12 @@ void hypertrackStudy()
                 auto ITStrackRef = matchCompLabelToMC(mcTracksMatrix, ITStrackLab);
 
                 if (isMatched)
+                {
+                    hTrackedInvMassForRes->Fill(calcMass(dauTracks));
+                    hStrTrackInvMass->Fill(calcMass(dauTracks));
+                    hV0InvMassForRes->Fill(calcMass(hyperV0));
                     continue;
-
-                
-                hStrTrackInvMass->Fill(calcMass(dauTracks));
-                hV0InvMass->Fill(calcMass(hyperV0));
-
-
+                }
 
                 LOG(info) << "**************";
                 LOG(info) << "ITS track position: " << strangeITSrefVec->at(iHyperVec);
@@ -448,9 +459,8 @@ void hypertrackStudy()
         auto cv = TCanvas("inv_mass_hyp", "", 1000, 1000);
         hV0InvMass->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
         hV0InvMass->GetYaxis()->SetTitle("Normalised Counts");
-
-        hV0InvMass->DrawNormalized();
-        hStrTrackInvMass->DrawNormalized("same");
+        hStrTrackInvMass->DrawNormalized();
+        hV0InvMass->DrawNormalized("same");
         hStrTrackInvMass->SetLineColor(kRed);
         auto leg = new TLegend(0.5, 0.5, 0.8, 0.8);
         leg->AddEntry(hV0InvMass, "Before tracking");
@@ -458,6 +468,18 @@ void hypertrackStudy()
         leg->Draw();
         cv.Write();
 
+        auto cv2 = TCanvas("inv_mass_res_study", "", 1000, 1000);
+        hV0InvMassForRes->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
+        hV0InvMassForRes->GetYaxis()->SetTitle("Normalised Counts");
+
+        hTrackedInvMassForRes->DrawNormalized();
+        hV0InvMassForRes->DrawNormalized("same");
+        hTrackedInvMassForRes->SetLineColor(kRed);
+        auto leg2 = new TLegend(0.5, 0.5, 0.8, 0.8);
+        leg2->AddEntry(hV0InvMassForRes, "Before tracking");
+        leg2->AddEntry(hTrackedInvMassForRes, "After tracking");
+        leg2->Draw();
+        cv2.Write();
 
         outFile.Close();
     }

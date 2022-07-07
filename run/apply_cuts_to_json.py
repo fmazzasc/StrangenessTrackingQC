@@ -4,7 +4,7 @@ import json
 import os
 
 # Reconstruction selections
-sv_cuts = 'svertexer.minCosPAXYMeanVertex=-1;svertexer.minDCAToPV=0.001;svertexer.minCosPA=-1;svertexer.maxChi2=5'
+sv_cuts = 'svertexer.minCosPAXYMeanVertex=-1;svertexer.minDCAToPV=0.001;svertexer.minCosPA=-1;svertexer.maxChi2=5;svertexer.checkV0Hypothesis=false'
 
 #read json
 

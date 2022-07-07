@@ -51,7 +51,8 @@ const int secondV0dauPDG = 211;
 
 double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG);
 
-std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc);
+std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc, bool &isV0reco);
+std::array<int, 2> checkV0mother(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, V0 &v0);
 std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel);
 std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel);
 std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, const std::vector<ITSCluster> &ITSClustersArray, std::vector<int> *ITSTrackClusIdx);
@@ -67,7 +68,7 @@ void cascadeStudy()
     for (auto fileObj : *files)
     {
         std::string file = ((TSystemFile *)fileObj)->GetName();
-        if (file.substr(0, 2) == "tf")
+        if (file.substr(0, 3) == "tf3")
         {
             dirs.push_back(path + file);
             auto innerdir = (TSystemDirectory *)fileObj;
@@ -93,6 +94,9 @@ void cascadeStudy()
     TH1D *hFakeAssocCounter = new TH1D("Fake assoc counter", ";Fake assoc counter; Counts", 1, 0.5, 1.5);
 
     TH1D *hRecXiCounter = new TH1D("Rec Xi counter", "; ; Counts", 1, 0.5, 1.5);
+    TH1D *hCascMomsInV0s = new TH1D("Rec V0s from Xi counter", "; ; Counts", 1, 0.5, 1.5);
+    TH1D *hFindableBachfromXiCounter = new TH1D("Rec bachelors from Xi counter", "; ; Counts", 1, 0.5, 1.5);
+
     TH1D *hXiStats = new TH1D("cascade_stats", "; ; Counts", 3, 0.5, 3.5);
 
     int counter = 0;
@@ -212,6 +216,7 @@ void cascadeStudy()
         }
 
         // Starting matching Cascades and ITS tracks
+        int counterV0 = 0;
         for (int frame = 0; frame < treeITS->GetEntriesFast(); frame++)
         {
             if (!treeITS->GetEvent(frame) || !treeITS->GetEvent(frame) || !treeSecondaries->GetEvent(frame) || !treeITSTPC->GetEvent(frame) || !treeTPC->GetEvent(frame) ||
@@ -223,16 +228,19 @@ void cascadeStudy()
                 hCascCounter->Fill(1);
                 auto &casc = cascVec->at(iCascVec);
 
-                auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc);
+                bool isV0reco = false;
+                auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc, isV0reco);
 
                 if (cascMCref[0] == -1 || cascMCref[1] == -1)
                     continue;
-                
+
+                LOG(info) << "Casc found!";
+
                 hRecXiCounter->Fill(1);
 
                 auto &mcCasc = mcTracksMatrix[cascMCref[0]][cascMCref[1]];
-                LOG(info) << "---------------------------------------------------";
-                LOG(info) << "Cascade found, PDG: " << mcCasc.GetPdgCode() << ", MC pT: " << mcCasc.GetPt() << ", reco Pt: " << casc.getPt();
+                // LOG(info) << "---------------------------------------------------";
+                // LOG(info) << "Cascade found, PDG: " << mcCasc.GetPdgCode() << ", MC pT: " << mcCasc.GetPt() << ", reco Pt: " << casc.getPt();
 
                 // Matching ITS tracks to MC tracks and V0
                 std::array<int, 2> ITSref = {-1, 1};
@@ -272,38 +280,51 @@ void cascadeStudy()
                 }
             }
 
-            for (unsigned int iHyperVec = 0; iHyperVec < strangeTrackVec->size(); iHyperVec++)
+            for (unsigned int iV0 = 0; iV0 < v0Vec->size(); iV0++)
             {
-
-                auto &strangeTrack = strangeTrackVec->at(iHyperVec);
-                if (!strangeTrack.isCascade)
-                {
+                auto &v0 = v0Vec->at(iV0);
+                auto v0MCref = checkV0mother(mcTracksMatrix, map, v0);
+                if (v0MCref[0] == -1 || v0MCref[1] == -1)
                     continue;
-                }
-
-                auto &hyperChi2 = strangeTrack.mMatchChi2;
-                auto &clusAttachments = nAttachments->at(iHyperVec);
-                auto &ITStrack = ITStracks->at(strangeITSrefVec->at(iHyperVec));
-                auto &ITStrackLab = labITSvec->at(strangeITSrefVec->at(iHyperVec));
-
-                auto clusAttArr = clusAttachments.arr;
-                auto &casc = cascVec->at(strangeDecRefVec->at(iHyperVec));
-
-                auto ITStrackRef = matchCompLabelToMC(mcTracksMatrix, ITStrackLab);
-                auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc);
-
-                if (cascMCref[0] == -1 || cascMCref[1] == -1 || ITStrackRef[0] == -1 || ITStrackRef[1] == -1)
-                    continue;
-
-                if (ITStrackRef[0] == cascMCref[0] && ITStrackRef[1] == cascMCref[1])
-                {
-                    hXiStats->Fill(2);
-                }
-                else
-                {
-                    hFakeAssocCounter->Fill(1);
-                }
+                LOG(info) << "V0 from Xi found!";
+                hCascMomsInV0s->Fill(1);
             }
+
+            // LOG(info) << "+++++++++++++++++++++++++++++++++++++++++++++";
+
+            // for (unsigned int iHyperVec = 0; iHyperVec < strangeTrackVec->size(); iHyperVec++)
+            // {
+
+            //     auto &strangeTrack = strangeTrackVec->at(iHyperVec);
+            //     if (!strangeTrack.isCascade)
+            //     {
+            //         continue;
+            //     }
+
+            //     auto &hyperChi2 = strangeTrack.mMatchChi2;
+            //     auto &clusAttachments = nAttachments->at(iHyperVec);
+            //     auto &ITStrack = ITStracks->at(strangeITSrefVec->at(iHyperVec));
+            //     auto &ITStrackLab = labITSvec->at(strangeITSrefVec->at(iHyperVec));
+
+            //     auto clusAttArr = clusAttachments.arr;
+            //     auto &casc = cascVec->at(strangeDecRefVec->at(iHyperVec));
+
+            //     auto ITStrackRef = matchCompLabelToMC(mcTracksMatrix, ITStrackLab);
+            //     bool isV0reco = false;
+            //     auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc, isV0reco);
+
+            //     if (cascMCref[0] == -1 || cascMCref[1] == -1 || ITStrackRef[0] == -1 || ITStrackRef[1] == -1)
+            //         continue;
+
+            //     if (ITStrackRef[0] == cascMCref[0] && ITStrackRef[1] == cascMCref[1])
+            //     {
+            //         hXiStats->Fill(2);
+            //     }
+            //     else
+            //     {
+            //         hFakeAssocCounter->Fill(1);
+            //     }
+            // }
         }
     }
 
@@ -318,9 +339,10 @@ void cascadeStudy()
     hXiStats->Write();
     hRecXiCounter->Write();
     hFakeAssocCounter->Write();
+    hCascMomsInV0s->Write();
     outFile.Close();
 }
-std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc)
+std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc, bool &isV0reco)
 {
     std::array<int, 2> motherVec{-1, -1};
     std::array<std::array<int, 2>, 2> v0DauRefs;
@@ -364,11 +386,26 @@ std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mc
 
     if (!(std::abs(dau1MC.GetPdgCode()) == firstV0dauPDG && std::abs(dau2MC.GetPdgCode()) == secondV0dauPDG) && !(std::abs(dau1MC.GetPdgCode()) == secondV0dauPDG && std::abs(dau2MC.GetPdgCode()) == firstV0dauPDG))
         return motherVec;
+
     if (!dau1MC.isSecondary() || !dau2MC.isSecondary() || dau1MC.getMotherTrackId() != dau2MC.getMotherTrackId())
         return motherVec;
 
+    LOG(info) << "-----------------------------------------";
+    LOG(info) << "V0 daughters: " << dau1MC.GetPdgCode() << " " << dau2MC.GetPdgCode();
+    LOG(info) << " Dau refs: " << dau1MC.getMotherTrackId() << " " << dau2MC.getMotherTrackId();
+
     auto v0MC = mcTracksMatrix[v0DauRefs[0][0]][dau1MC.getMotherTrackId()];
     auto &bachMC = mcTracksMatrix[bachRef[0]][bachRef[1]];
+    LOG(info) << "V0 mother: " << v0MC.GetPdgCode() << ", Ref: " << v0MC.getMotherTrackId();
+    LOG(info) << "bach PDG: " << bachMC.GetPdgCode() << ", Ref: " << bachMC.getMotherTrackId();
+
+    if (v0MC.getMotherTrackId() >= 0)
+    {
+        LOG(info) << "PDG of Casc from V0:" << std::abs(mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()].GetPdgCode());
+
+        if (std::abs(mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()].GetPdgCode()) == motherPDG)
+            isV0reco = true;
+    }
 
     if (std::abs(v0MC.GetPdgCode()) != v0PDG || !v0MC.isSecondary() || !bachMC.isSecondary())
         return motherVec;
@@ -376,6 +413,60 @@ std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mc
     auto cascMC = mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()];
     if (v0MC.getMotherTrackId() != bachMC.getMotherTrackId() || std::abs(cascMC.GetPdgCode()) != motherPDG)
         return motherVec;
+
+    LOG(info) << "Casc PDG: " << mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()].GetPdgCode();
+
+    motherVec = {v0DauRefs[0][0], v0MC.getMotherTrackId()};
+    return motherVec;
+}
+
+std::array<int, 2> checkV0mother(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, V0 &v0)
+{
+    std::array<int, 2> motherVec{-1, -1};
+    std::array<std::array<int, 2>, 2> v0DauRefs;
+
+    for (unsigned int iV0 = 0; iV0 < 2; iV0++)
+    {
+        v0DauRefs[iV0] = {-1, -1};
+        if (map[v0.getProngID(iV0).getSourceName()])
+        {
+            auto labTrackType = map[v0.getProngID(iV0).getSourceName()];
+            auto lab = labTrackType->at(v0.getProngID(iV0).getIndex());
+
+            int trackID, evID, srcID;
+            bool fake;
+            lab.get(trackID, evID, srcID, fake);
+            if (lab.isValid())
+            {
+                v0DauRefs[iV0] = {lab.getEventID(), lab.getTrackID()};
+            }
+        }
+    }
+
+    if (v0DauRefs[0][1] == -1 || v0DauRefs[1][1] == -1)
+        return motherVec;
+
+    auto &dau1MC = mcTracksMatrix[v0DauRefs[0][0]][v0DauRefs[0][1]];
+    auto &dau2MC = mcTracksMatrix[v0DauRefs[1][0]][v0DauRefs[1][1]];
+
+    if (!(std::abs(dau1MC.GetPdgCode()) == firstV0dauPDG && std::abs(dau2MC.GetPdgCode()) == secondV0dauPDG) && !(std::abs(dau1MC.GetPdgCode()) == secondV0dauPDG && std::abs(dau2MC.GetPdgCode()) == firstV0dauPDG))
+        return motherVec;
+
+    if (!dau1MC.isSecondary() || !dau2MC.isSecondary() || dau1MC.getMotherTrackId() != dau2MC.getMotherTrackId())
+        return motherVec;
+
+    LOG(info) << "-----------------------------------------";
+    LOG(info) << "V0 daughters: " << dau1MC.GetPdgCode() << " " << dau2MC.GetPdgCode();
+    LOG(info) << " Dau refs: " << dau1MC.getMotherTrackId() << " " << dau2MC.getMotherTrackId();
+
+    auto v0MC = mcTracksMatrix[v0DauRefs[0][0]][dau1MC.getMotherTrackId()];
+    LOG(info) << "V0 mother: " << v0MC.GetPdgCode() << ", Ref: " << v0MC.getMotherTrackId();
+
+    auto cascMC = mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()];
+    if (std::abs(cascMC.GetPdgCode()) != motherPDG)
+        return motherVec;
+
+    LOG(info) << "Casc from V0 PDG: " << mcTracksMatrix[v0DauRefs[0][0]][v0MC.getMotherTrackId()].GetPdgCode();
 
     motherVec = {v0DauRefs[0][0], v0MC.getMotherTrackId()};
     return motherVec;
