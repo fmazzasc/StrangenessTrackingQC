@@ -28,6 +28,7 @@
 #include "CommonDataFormat/RangeReference.h"
 #include "DetectorsVertexing/DCAFitterN.h"
 #include "StrangenessTracking/StrangenessTracker.h"
+#include "cascadeStudyUtils.h"
 
 #endif
 
@@ -43,19 +44,8 @@ using ITSCluster = o2::BaseCluster<float>;
 using Vec3 = ROOT::Math::SVector<double, 3>;
 using StrangeTrack = o2::strangeness_tracking::StrangeTrack;
 
-const int motherPDG = 3312;
-const int v0PDG = 3122;
-const int bachPDG = 211;
-const int firstV0dauPDG = 2212;
-const int secondV0dauPDG = 211;
-
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG);
-
 std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc, bool &isV0reco);
 std::array<int, 2> checkV0mother(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, V0 &v0);
-std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel);
-std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel);
-std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, const std::vector<ITSCluster> &ITSClustersArray, std::vector<int> *ITSTrackClusIdx);
 
 void cascadeStudy()
 {
@@ -89,15 +79,27 @@ void cascadeStudy()
     TH1D *hResHyperhisto = new TH1D("pT resolution after hypertracking", ";(#it{p}_{T}^{gen} - #it{p}_{T}^{rec})/#it{p}_{T}^{gen}; Counts", 20, -0.2, 0.2);
     TH1D *hResCascR2 = new TH1D("R2 resolution before tracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 20, -0.2, 0.2);
     TH1D *hResCascTrackedR2 = new TH1D("R2 resolution after tracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 20, -0.2, 0.2);
+
     TH1D *hCascCounter = new TH1D("Casc counter", ";Casc counter; Counts", 1, 0.5, 1.5);
     TH1D *hGenXiCounter = new TH1D("Gen Casc counter", ";Casc counter; Counts", 1, 0.5, 1.5);
+
+    TH1D *hGenXiRadius = new TH1D("gen_casc_r", "; Radius (cm); Counts", 40, 0., 40.);
+    TH1D *hGenXiMom = new TH1D("gen_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
+
+    TH1D *hRecXiRadius = new TH1D("rec_casc_r", "; Radius (cm); Counts", 40, 0., 40.);
+    TH1D *hRecXiMom = new TH1D("rec_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
     TH1D *hFakeAssocCounter = new TH1D("Fake assoc counter", ";Fake assoc counter; Counts", 1, 0.5, 1.5);
 
     TH1D *hRecXiCounter = new TH1D("Rec Xi counter", "; ; Counts", 1, 0.5, 1.5);
     TH1D *hCascMomsInV0s = new TH1D("Rec V0s from Xi counter", "; ; Counts", 1, 0.5, 1.5);
     TH1D *hFindableBachfromXiCounter = new TH1D("Rec bachelors from Xi counter", "; ; Counts", 1, 0.5, 1.5);
 
+    TH1D *hRecCascInvMass = new TH1D("Rec Casc InvMass", "; M (GeV/c^{2}); Counts", 150, 1.2, 1.5);
+    TH1D *hStrangeTrackInvMass = new TH1D("Strange track inv mass", ";M (GeV/c^{2}); Counts", 150, 1.2, 1.5);
     TH1D *hXiStats = new TH1D("cascade_stats", "; ; Counts", 3, 0.5, 3.5);
+
+    TH1D *hRecXiRad = new TH1D("r_trackable", ";Radius_{trackable} (cm); Counts", 20, 4, 40);
+    TH1D *hTrackedXiR2 = new TH1D("R2 resolution after tracking", ";R2^{rec} (cm); Counts", 20, 4, 40);
 
     int counter = 0;
     for (unsigned int i = 0; i < dirs.size(); i++)
@@ -210,7 +212,10 @@ void cascadeStudy()
                 mcTracksMatrix[n][mcI] = MCtracks->at(mcI);
                 if (abs(MCtracks->at(mcI).GetPdgCode()) == motherPDG)
                 {
+                    auto &motherTrack = mcTracksMatrix[n][mcI];
                     hGenXiCounter->Fill(1);
+                    hGenXiMom->Fill(motherTrack.GetPt());
+                    hGenXiRadius->Fill(calcDecLength(MCtracks, motherTrack, bachPDG));
                 }
             }
         }
@@ -227,6 +232,7 @@ void cascadeStudy()
             {
                 hCascCounter->Fill(1);
                 auto &casc = cascVec->at(iCascVec);
+                hRecCascInvMass->Fill(sqrt(casc.calcMass2()));
 
                 bool isV0reco = false;
                 auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc, isV0reco);
@@ -237,10 +243,9 @@ void cascadeStudy()
                 LOG(info) << "Casc found!";
 
                 hRecXiCounter->Fill(1);
-
+                hRecXiRadius->Fill(sqrt(casc.calcR2()));
+                hRecXiMom->Fill(casc.getPt());
                 auto &mcCasc = mcTracksMatrix[cascMCref[0]][cascMCref[1]];
-                // LOG(info) << "---------------------------------------------------";
-                // LOG(info) << "Cascade found, PDG: " << mcCasc.GetPdgCode() << ", MC pT: " << mcCasc.GetPt() << ", reco Pt: " << casc.getPt();
 
                 // Matching ITS tracks to MC tracks and V0
                 std::array<int, 2> ITSref = {-1, 1};
@@ -262,6 +267,7 @@ void cascadeStudy()
                     {
                         LOG(info) << "ITS track found! " << ITStrack.getPt();
                         hXiStats->Fill(1);
+                        hRecXiRad->Fill(sqrt(casc.calcR2()));
 
                         auto firstClus = ITStrack.getFirstClusterEntry();
                         auto ncl = ITStrack.getNumberOfClusters();
@@ -290,7 +296,7 @@ void cascadeStudy()
                 hCascMomsInV0s->Fill(1);
             }
 
-            // LOG(info) << "+++++++++++++++++++++++++++++++++++++++++++++";
+            LOG(info) << "+++++++++++++++++++++++++++++++++++++++++++++";
 
             // for (unsigned int iHyperVec = 0; iHyperVec < strangeTrackVec->size(); iHyperVec++)
             // {
@@ -313,12 +319,19 @@ void cascadeStudy()
             //     bool isV0reco = false;
             //     auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc, isV0reco);
 
+            //     std::vector<o2::track::TrackParCovF> dauTracks = {strangeTrack.mDaughterFirst, strangeTrack.mDaughterSecond};
+
+            //     hStrangeTrackInvMass->Fill(calcMass(dauTracks));
+
             //     if (cascMCref[0] == -1 || cascMCref[1] == -1 || ITStrackRef[0] == -1 || ITStrackRef[1] == -1)
             //         continue;
+
+            //     LOG(info) << ITStrackRef[0] << " " << ITStrackRef[1] << " " << cascMCref[0] << " " << cascMCref[1];
 
             //     if (ITStrackRef[0] == cascMCref[0] && ITStrackRef[1] == cascMCref[1])
             //     {
             //         hXiStats->Fill(2);
+            //         hTrackedXiR2->Fill(sqrt(casc.calcR2()));
             //     }
             //     else
             //     {
@@ -340,6 +353,53 @@ void cascadeStudy()
     hRecXiCounter->Write();
     hFakeAssocCounter->Write();
     hCascMomsInV0s->Write();
+
+    hRecCascInvMass->Write();
+    hStrangeTrackInvMass->Write();
+
+    hRecXiRad->Write();
+
+    hTrackedXiR2->Divide(hRecXiRad);
+    auto cv1 = TCanvas("trackable_efficiency_r", "", 1000, 1000);
+    hTrackedXiR2->GetXaxis()->SetTitle("Radius (cm)");
+    hTrackedXiR2->GetYaxis()->SetTitle("Efficiency_{trackable}");
+    hTrackedXiR2->SetLineColor(kBlue);
+    hTrackedXiR2->Draw();
+    cv1.Write();
+
+    auto cv2 = TCanvas("inv_mass_res_study", "", 1000, 1000);
+    hStrangeTrackInvMass->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
+    hStrangeTrackInvMass->GetYaxis()->SetTitle("Normalised Counts");
+    hStrangeTrackInvMass->SetLineColor(kRed);
+    hStrangeTrackInvMass->SetLineWidth(2);
+    hRecCascInvMass->SetLineWidth(2);
+
+    hStrangeTrackInvMass->DrawNormalized();
+    hRecCascInvMass->DrawNormalized("same");
+
+    auto leg2 = new TLegend(0.5, 0.5, 0.8, 0.8);
+    leg2->AddEntry(hStrangeTrackInvMass, "After tracking");
+    leg2->AddEntry(hRecCascInvMass, "Before tracking");
+    leg2->Draw();
+    cv2.Write();
+
+    hRecXiRadius->Sumw2();
+    hRecXiRadius->Divide(hGenXiRadius);
+    auto cv3 = TCanvas("reco_efficiency_r", "", 1000, 1000);
+    hRecXiRadius->GetXaxis()->SetTitle("Radius (cm)");
+    hRecXiRadius->GetYaxis()->SetTitle("Efficiency");
+    hRecXiRadius->SetLineColor(kBlue);
+    hRecXiRadius->Draw();
+    cv3.Write();
+
+    hRecXiMom->Sumw2();
+    hRecXiMom->Divide(hGenXiMom);
+    auto cv4 = TCanvas("reco_efficiency_pt", "", 1000, 1000);
+    hRecXiMom->GetYaxis()->SetTitle("Efficiency");
+    hRecXiMom->SetLineColor(kBlue);
+    hRecXiMom->Draw("pe");
+    cv4.Write();
+
     outFile.Close();
 }
 std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc, bool &isV0reco)
@@ -470,64 +530,4 @@ std::array<int, 2> checkV0mother(const std::vector<std::vector<o2::MCTrack>> &mc
 
     motherVec = {v0DauRefs[0][0], v0MC.getMotherTrackId()};
     return motherVec;
-}
-
-std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel)
-
-{
-    std::array<int, 2> outArray = {-1, -1};
-    int trackID, evID, srcID;
-    bool fake;
-    ITSlabel.get(trackID, evID, srcID, fake);
-    if (ITSlabel.isValid() && std::abs(mcTracksMatrix[evID][trackID].GetPdgCode()) == motherPDG)
-    {
-        outArray = {evID, trackID};
-    }
-
-    return outArray;
-}
-
-std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel compLabel)
-{
-    std::array<int, 2> compRef = {-1, -1};
-    int trackID, evID, srcID;
-    bool fake;
-    compLabel.get(trackID, evID, srcID, fake);
-    if (compLabel.isValid())
-    {
-        compRef = {evID, trackID};
-    }
-    return compRef;
-}
-
-std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, const std::vector<ITSCluster> &ITSClustersArray, std::vector<int> *ITSTrackClusIdx)
-{
-
-    std::vector<ITSCluster> outVec;
-    auto firstClus = ITStrack.getFirstClusterEntry();
-    auto ncl = ITStrack.getNumberOfClusters();
-    for (int icl = 0; icl < ncl; icl++)
-    {
-        outVec.push_back(ITSClustersArray[(*ITSTrackClusIdx)[firstClus + icl]]);
-    }
-    return outVec;
-}
-
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG)
-{
-    auto idStart = motherTrack.getFirstDaughterTrackId();
-    auto idStop = motherTrack.getLastDaughterTrackId();
-    for (auto iD{idStart}; iD < idStop; ++iD)
-    {
-        auto dauTrack = MCTracks->at(iD);
-        if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
-        {
-            auto decLength = (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) *
-                                 (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) +
-                             (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) *
-                                 (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY());
-            return decLength;
-        }
-    }
-    return -1;
 }

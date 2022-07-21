@@ -50,6 +50,7 @@ double calcV0alpha(const V0 &v0);
 double recomputeV0Pt(const V0 &v0);
 double calcMass(const V0 &v0);
 double calcMass(std::vector<o2::track::TrackParCovF> tracks);
+double calcCtau(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG);
 
 std::vector<std::array<int, 2>> matchV0stoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec);
 std::array<int, 2> matchV0DautoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, o2::dataformats::V0::GIndex dauID);
@@ -81,10 +82,21 @@ void hypertrackStudy()
     TH1D *hV0InvMass = new TH1D("v0_inv_mass", "; M ; Counts", 120, 2.96, 3.04);
     TH1D *hStrTrackInvMass = new TH1D("strtrack_inv_mass", "; M ; Counts", 120, 2.96, 3.04);
 
-    TH1D *hV0InvMassForRes = new TH1D("v0_inv_mass_res_study", "; M ; Counts", 120, 2.96, 3.04);
-    TH1D *hTrackedInvMassForRes = new TH1D("strtrack_inv_mass_res_study", "; M ; Counts", 120, 2.96, 3.04);
+    TH1D *hGenHypRadius = new TH1D("gen_hyp_r", "; Radius (cm); Counts", 40, 0., 40.);
+    TH1D *hGenHypCt = new TH1D("gen_hyp_ct", "; #it{c}t_{gen} (cm); Counts", 200, 0., 40.);
 
-    std::string path = "/data/fmazzasc/its_data/sim/hyp_ab_new/";
+    TH1D *hGenHypMom = new TH1D("gen_hyp_pt", "; #it{p}_{T}^{gen}; Counts", 40, 1, 10);
+
+    TH1D *hRecHypRadius = new TH1D("rec_hyp_r", "; Radius (cm); Counts", 40, 0., 40.);
+    TH1D *hRecHypMom = new TH1D("rec_hyp_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
+
+    TH1D *hRecHypRadiusTrackab = new TH1D("rec_hyp_r_trackable", "; Radius (cm); Counts", 40, 4., 40.);
+    TH1D *hRecHypRadiusTracked = new TH1D("rec_hyp_r_tracked", "; Radius (cm); Counts", 40, 4., 40.);
+
+    TH1D *hV0InvMassForRes = new TH1D("v0_inv_mass_res_study", "; M (GeV/c^{2}) ; Counts", 120, 2.96, 3.04);
+    TH1D *hTrackedInvMassForRes = new TH1D("strtrack_inv_mass_res_study", "; M (GeV/c^{2}) ; Counts", 120, 2.96, 3.04);
+
+    std::string path = "/data/fmazzasc/its_data/sim/hyp_2/";
     TSystemDirectory dir("MyDir", path.data());
     auto files = dir.GetListOfFiles();
     std::vector<std::string> dirs;
@@ -93,7 +105,7 @@ void hypertrackStudy()
     for (auto fileObj : *files)
     {
         std::string file = ((TSystemFile *)fileObj)->GetName();
-        if (file.substr(0, 3) == "tf5")
+        if (file.substr(0, 2) == "tf")
         {
             dirs.push_back(path + file);
             auto innerdir = (TSystemDirectory *)fileObj;
@@ -219,6 +231,9 @@ void hypertrackStudy()
                 {
                     auto &mcTrack = mcTracksMatrix[n][mcI];
                     hMChisto->Fill(mcTrack.GetPt(), calcDecLength(MCtracks, mcTrack, firstDaughterPDG));
+                    hGenHypMom->Fill(mcTrack.GetPt());
+                    hGenHypRadius->Fill(calcDecLength(MCtracks, mcTrack, firstDaughterPDG));
+                    hGenHypCt->Fill(calcCtau(MCtracks, mcTrack, firstDaughterPDG));
                 }
             }
         }
@@ -253,6 +268,8 @@ void hypertrackStudy()
 
                 auto &mcTrack = mcTracksMatrix[v0MCref[0]][v0MCref[1]];
                 hV0histo->Fill(recomputeV0Pt(v0), v0.calcR2());
+                hRecHypMom->Fill(recomputeV0Pt(v0));
+                hRecHypRadius->Fill(sqrt(v0.calcR2()));
 
                 // Matching ITS tracks to MC tracks and V0
                 std::array<int, 2> ITSref = {-1, 1};
@@ -262,6 +279,7 @@ void hypertrackStudy()
 
                 int iTrack = -1;
                 bool isMatched = false;
+                o2::MCCompLabel labITSmatched;
 
                 for (unsigned int iITStrack = 0; iITStrack < ITStracks->size(); iITStrack++)
                 {
@@ -286,12 +304,21 @@ void hypertrackStudy()
                         hHypertrackerStats->Fill(1);
                         isMatched = true;
                         iTrack = iITStrack;
+                        labITSmatched = labITS;
                         break;
                     }
                 }
 
                 if (!isMatched)
                     continue;
+
+                hRecHypRadiusTrackab->Fill(sqrt(v0.calcR2()));
+
+                if (sqrt(v0.calcR2()) < 18)
+                {
+                    LOG(info) << "LOW RADIUS" << ", is Fake? " << labITSmatched.isFake();
+                    
+                }
 
                 LOG(info) << V0sMCref[iV0vec][0] << "  " << V0sMCref[iV0vec][1];
 
@@ -314,6 +341,7 @@ void hypertrackStudy()
                         LOG(info) << "Hypertrack found!: ITS track ref: " << hyperITSref;
                         isHypertracked = true;
                         matchedHypertrackVec[iHyperVec] = true;
+                        hRecHypRadiusTracked->Fill(sqrt(v0.calcR2()));
                         hHyperCounter->Fill(1);
                         hHypertrackerStats->Fill(2);
                         hHyperhisto->Fill(strangeTrack.mMother.getPt(), hyperV0.calcR2());
@@ -353,8 +381,6 @@ void hypertrackStudy()
                             if (clsRef[i][0] != ITSref[0])
                             {
                                 LOG(info) << "EvID mismatch: " << clsRef[i][0] << " " << ITSref[0];
-                                LOG(info) << "Cluster ref: " << clsRef[i][0] << " " << clsRef[i][1] << " , PDG: " << mcTracksMatrix[clsRef[i][0]][clsRef[i][1]].GetPdgCode();
-
                                 continue;
                             }
                             if (clsRef[i][1] != ITSref[1])
@@ -435,54 +461,94 @@ void hypertrackStudy()
                 }
             }
         }
-        auto outFile = TFile("hypertrack_study.root", "recreate");
-        hChi2Sgn->Write();
-        hChi2Bkg->Write();
-
-        hV0histo->Write();
-        hResV0histo->Write();
-        hResV0histoR2->Write();
-        hHyperhisto->Write();
-        hResHyperhisto->Write();
-        hResHyperhistoR2->Write();
-        hMChisto->Write();
-
-        hV0Counter->Write();
-        hHypertrackerStats->Write();
-        hHyperCounter->Write();
-        hFakeAssocCounter->Write();
-        hRecHypCounter->Write();
-
-        hV0InvMass->Write();
-        hStrTrackInvMass->Write();
-
-        auto cv = TCanvas("inv_mass_hyp", "", 1000, 1000);
-        hV0InvMass->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
-        hV0InvMass->GetYaxis()->SetTitle("Normalised Counts");
-        hStrTrackInvMass->DrawNormalized();
-        hV0InvMass->DrawNormalized("same");
-        hStrTrackInvMass->SetLineColor(kRed);
-        auto leg = new TLegend(0.5, 0.5, 0.8, 0.8);
-        leg->AddEntry(hV0InvMass, "Before tracking");
-        leg->AddEntry(hStrTrackInvMass, "After tracking");
-        leg->Draw();
-        cv.Write();
-
-        auto cv2 = TCanvas("inv_mass_res_study", "", 1000, 1000);
-        hV0InvMassForRes->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
-        hV0InvMassForRes->GetYaxis()->SetTitle("Normalised Counts");
-
-        hTrackedInvMassForRes->DrawNormalized();
-        hV0InvMassForRes->DrawNormalized("same");
-        hTrackedInvMassForRes->SetLineColor(kRed);
-        auto leg2 = new TLegend(0.5, 0.5, 0.8, 0.8);
-        leg2->AddEntry(hV0InvMassForRes, "Before tracking");
-        leg2->AddEntry(hTrackedInvMassForRes, "After tracking");
-        leg2->Draw();
-        cv2.Write();
-
-        outFile.Close();
     }
+
+    auto outFile = TFile("hypertrack_study.root", "recreate");
+    hChi2Sgn->Write();
+    hChi2Bkg->Write();
+
+    hV0histo->Write();
+    hResV0histo->Write();
+    hResV0histoR2->Write();
+    hHyperhisto->Write();
+    hResHyperhisto->Write();
+    hResHyperhistoR2->Write();
+    hMChisto->Write();
+
+    hV0Counter->Write();
+    hHypertrackerStats->Write();
+    hHyperCounter->Write();
+    hFakeAssocCounter->Write();
+    hRecHypCounter->Write();
+
+    hV0InvMass->Write();
+    hStrTrackInvMass->Write();
+
+    auto cv = TCanvas("inv_mass_hyp", "", 1000, 1000);
+    hV0InvMass->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
+    hV0InvMass->GetYaxis()->SetTitle("Normalised Counts");
+
+    hV0InvMass->SetLineWidth(2);
+
+    hStrTrackInvMass->SetLineWidth(2);
+    hStrTrackInvMass->SetLineColor(kRed);
+    hStrTrackInvMass->DrawNormalized();
+    hV0InvMass->DrawNormalized("same");
+    hStrTrackInvMass->SetLineColor(kRed);
+    auto leg = new TLegend(0.5, 0.5, 0.8, 0.8);
+    leg->AddEntry(hV0InvMass, "Before tracking");
+    leg->AddEntry(hStrTrackInvMass, "After tracking");
+    leg->Draw();
+    cv.Write();
+
+    auto cv2 = TCanvas("inv_mass_res_study", "", 1000, 1000);
+    hV0InvMassForRes->GetXaxis()->SetTitle("M(GeV/#it{c}^{2})");
+    hV0InvMassForRes->GetYaxis()->SetTitle("Normalised Counts");
+    hV0InvMassForRes->SetLineWidth(2);
+    hTrackedInvMassForRes->SetLineWidth(2);
+
+    hTrackedInvMassForRes->DrawNormalized();
+    hV0InvMassForRes->DrawNormalized("same");
+    hTrackedInvMassForRes->SetLineColor(kRed);
+    auto leg2 = new TLegend(0.5, 0.5, 0.8, 0.8);
+    leg2->AddEntry(hV0InvMassForRes, "Before tracking");
+    leg2->AddEntry(hTrackedInvMassForRes, "After tracking");
+    leg2->Draw();
+    cv2.Write();
+
+    hRecHypRadius->Sumw2();
+    hRecHypRadius->Divide(hGenHypRadius);
+    auto cv3 = TCanvas("reco_efficiency_r", "", 1000, 1000);
+    hRecHypRadius->GetXaxis()->SetTitle("Radius (cm)");
+    hRecHypRadius->GetYaxis()->SetTitle("Efficiency");
+    hRecHypRadius->SetLineColor(kRed);
+    hRecHypRadius->Draw();
+    cv3.Write();
+
+    hRecHypMom->Write();
+    hGenHypMom->Write();
+
+    hRecHypMom->Sumw2();
+    hRecHypMom->Divide(hGenHypMom);
+    auto cv4 = TCanvas("reco_efficiency_pt", "", 1000, 1000);
+    hRecHypMom->GetYaxis()->SetTitle("Efficiency");
+    hRecHypMom->SetLineColor(kRed);
+    hRecHypMom->Draw("pe");
+    cv4.Write();
+
+    hRecHypRadiusTracked->Divide(hRecHypRadiusTrackab);
+    auto cv1 = TCanvas("trackable_efficiency_r", "", 1000, 1000);
+    hRecHypRadiusTracked->GetXaxis()->SetTitle("Radius (cm)");
+    hRecHypRadiusTracked->GetYaxis()->SetTitle("Efficiency_{trackable}");
+    hRecHypRadiusTracked->SetLineColor(kRed);
+    hRecHypRadiusTracked->SetLineWidth(2.);
+    hRecHypRadiusTracked->Draw();
+    cv1.Write();
+
+    hGenHypCt->Write();
+    hRecHypRadiusTrackab->Write();
+
+    outFile.Close();
 }
 std::vector<std::array<int, 2>> matchV0stoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec)
 {
@@ -616,7 +682,28 @@ double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
                                  (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) +
                              (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) *
                                  (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY());
-            return decLength;
+            return sqrt(decLength);
+        }
+    }
+    return -1;
+}
+
+double calcCtau(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG)
+{
+    auto idStart = motherTrack.getFirstDaughterTrackId();
+    auto idStop = motherTrack.getLastDaughterTrackId();
+    for (auto iD{idStart}; iD < idStop; ++iD)
+    {
+        auto dauTrack = MCTracks->at(iD);
+        if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
+        {
+            auto decLength = (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) *
+                                 (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) +
+                             (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) *
+                                 (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) +
+                             (dauTrack.GetStartVertexCoordinatesZ() - motherTrack.GetStartVertexCoordinatesZ()) *
+                                 (dauTrack.GetStartVertexCoordinatesZ() - motherTrack.GetStartVertexCoordinatesZ());
+            return sqrt(decLength) * 2.99131 / motherTrack.GetP();
         }
     }
     return -1;
