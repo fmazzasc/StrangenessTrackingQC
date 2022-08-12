@@ -70,8 +70,8 @@ void hypertrackStudy()
     TH2D *hHyperhisto = new TH2D("histo hyperV0", ";#it{p}_{T} (GeV/#it{c}); Radius^2 (cm) ; Counts", 20, 1, 10, 30, 1, 900);
     TH1D *hResV0histo = new TH1D("pT resolution before hypertracking", ";(#it{p}_{T}^{gen} - #it{p}_{T}^{rec})/#it{p}_{T}^{gen}; Counts", 20, -0.2, 0.2);
     TH1D *hResHyperhisto = new TH1D("pT resolution after hypertracking", ";(#it{p}_{T}^{gen} - #it{p}_{T}^{rec})/#it{p}_{T}^{gen}; Counts", 20, -0.2, 0.2);
-    TH1D *hResV0histoR2 = new TH1D("R2 resolution before hypertracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 20, -0.2, 0.2);
-    TH1D *hResHyperhistoR2 = new TH1D("R2 resolution after hypertracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 20, -0.2, 0.2);
+    TH1D *hResV0histoR2 = new TH1D("R2 resolution before hypertracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 200, -0.2, 0.2);
+    TH1D *hResHyperhistoR2 = new TH1D("R2 resolution after hypertracking", ";(R2^{gen} - R2^{rec})/R2^{gen}; Counts", 200, -0.2, 0.2);
     TH1D *hV0Counter = new TH1D("V0 counter", ";V0 counter; Counts", 1, 0.5, 1.5);
 
     TH1D *hRecHypCounter = new TH1D("Rec V0 hyp counter", "; ; Counts", 1, 0.5, 1.5);
@@ -90,13 +90,15 @@ void hypertrackStudy()
     TH1D *hRecHypRadius = new TH1D("rec_hyp_r", "; Radius (cm); Counts", 40, 0., 40.);
     TH1D *hRecHypMom = new TH1D("rec_hyp_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
 
-    TH1D *hRecHypRadiusTrackab = new TH1D("rec_hyp_r_trackable", "; Radius (cm); Counts", 40, 4., 40.);
-    TH1D *hRecHypRadiusTracked = new TH1D("rec_hyp_r_tracked", "; Radius (cm); Counts", 40, 4., 40.);
+    TH1D *hRecHypRadiusTrackab = new TH1D("rec_hyp_r_trackable", "; Radius (cm); Counts", 40, 2., 40.);
+    TH1D *hRecHypRadiusFakes = new TH1D("rec_hyp_r_fakes", "; Radius (cm); Counts", 40, 2., 40.);
+
+    TH1D *hRecHypRadiusTracked = new TH1D("rec_hyp_r_tracked", "; Radius (cm); Counts", 40, 2., 40.);
 
     TH1D *hV0InvMassForRes = new TH1D("v0_inv_mass_res_study", "; M (GeV/c^{2}) ; Counts", 120, 2.96, 3.04);
     TH1D *hTrackedInvMassForRes = new TH1D("strtrack_inv_mass_res_study", "; M (GeV/c^{2}) ; Counts", 120, 2.96, 3.04);
 
-    std::string path = "/data/fmazzasc/its_data/sim/hyp_2/";
+    std::string path = "/data/fmazzasc/its_data/sim/hyp_2_body/";
     TSystemDirectory dir("MyDir", path.data());
     auto files = dir.GetListOfFiles();
     std::vector<std::string> dirs;
@@ -313,12 +315,8 @@ void hypertrackStudy()
                     continue;
 
                 hRecHypRadiusTrackab->Fill(sqrt(v0.calcR2()));
-
-                if (sqrt(v0.calcR2()) < 18)
-                {
-                    LOG(info) << "LOW RADIUS" << ", is Fake? " << labITSmatched.isFake();
-                    
-                }
+                if (labITSmatched.isFake())
+                    hRecHypRadiusFakes->Fill(sqrt(v0.calcR2()));
 
                 LOG(info) << V0sMCref[iV0vec][0] << "  " << V0sMCref[iV0vec][1];
 
@@ -347,9 +345,10 @@ void hypertrackStudy()
                         hHyperhisto->Fill(strangeTrack.mMother.getPt(), hyperV0.calcR2());
                         hResHyperhisto->Fill((strangeTrack.mMother.getPt() - mcTrack.GetPt()) / mcTrack.GetPt());
                         hResV0histo->Fill((recomputeV0Pt(v0) - mcTrack.GetPt()) / mcTrack.GetPt());
-                        hResV0histoR2->Fill((v0.calcR2() - calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG)) / calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG));
+                        hResV0histoR2->Fill((sqrt(v0.calcR2()) - calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG)) / calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG));
                         auto hyperR2 = strangeTrack.decayVtx[0] * strangeTrack.decayVtx[0] + strangeTrack.decayVtx[1] * strangeTrack.decayVtx[1];
-                        hResHyperhistoR2->Fill((hyperR2 - calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG)) / calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG));
+
+                        hResHyperhistoR2->Fill((sqrt(hyperR2) - calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG)) / calcDecLength(&mcTracksMatrix[v0MCref[0]], mcTrack, firstDaughterPDG));
                         hChi2Sgn->Fill(matchChi2);
                         break;
                     }
@@ -360,7 +359,7 @@ void hypertrackStudy()
                     LOG(info) << "------------------";
                     LOG(info) << "No hypertrack found, but ITS track found";
                     LOG(info) << "processing frame " << frame << ", dir: " << dir;
-                    LOG(info) << "V0 pos: " << v0.getProngID(0) << " V0 neg: " << v0.getProngID(1) << " V0pt: " << v0.getPt() << " ITSpt: " << ITStrack.getPt();
+                    LOG(info) << "V0 pos: " << v0.getProngID(0) << " V0 neg: " << v0.getProngID(1) << ", ITS track ref: " << iTrack;
                     LOG(info) << "V0 Eta: " << v0.getEta() << " V0 phi" << v0.getPhi() << " ITS eta: " << ITStrack.getEta() << " ITS phi: " << ITStrack.getPhi();
 
                     LOG(info) << "V0 pos ref: " << v0.getProngID(0) << ", neg ref: " << v0.getProngID(1);
@@ -395,14 +394,13 @@ void hypertrackStudy()
                 }
             }
 
-            LOG(info) << " Start studying fake associations";
+            // LOG(info) << " Start studying fake associations";
             for (unsigned int iHyperVec = 0; iHyperVec < strangeTrackVec->size(); iHyperVec++)
             {
 
                 auto &strangeTrack = strangeTrackVec->at(iHyperVec);
                 if (strangeTrack.isCascade)
                 {
-                    LOG(info) << "CASCADE!";
                     continue;
                 }
                 auto &hyperChi2 = strangeTrack.mMatchChi2;
@@ -428,20 +426,20 @@ void hypertrackStudy()
                     continue;
                 }
 
-                LOG(info) << "**************";
-                LOG(info) << "ITS track position: " << strangeITSrefVec->at(iHyperVec);
-                LOG(info) << "V0 pos: " << hyperV0.getProngID(0) << " V0 neg: " << hyperV0.getProngID(1) << " V0pt: " << hyperV0.getPt() << " ITSpt: " << ITStrack.getPt() << ", IS matched:" << isMatched << ", iHyperVec: " << iHyperVec << ", size" << strangeTrackVec->size();
-                LOG(info) << "V0 pos lab: " << v0PosRef[0] << " " << v0PosRef[1] << ", V0 neg lab: " << v0NegRef[0] << " " << v0NegRef[1] << ", ITS ref: " << ITStrackRef[0] << " " << ITStrackRef[1];
+                // LOG(info) << "**************";
+                // LOG(info) << "ITS track position: " << strangeITSrefVec->at(iHyperVec);
+                // LOG(info) << "V0 pos: " << hyperV0.getProngID(0) << " V0 neg: " << hyperV0.getProngID(1) << " V0pt: " << hyperV0.getPt() << " ITSpt: " << ITStrack.getPt() << ", IS matched:" << isMatched << ", iHyperVec: " << iHyperVec << ", size" << strangeTrackVec->size();
+                // LOG(info) << "V0 pos lab: " << v0PosRef[0] << " " << v0PosRef[1] << ", V0 neg lab: " << v0NegRef[0] << " " << v0NegRef[1] << ", ITS ref: " << ITStrackRef[0] << " " << ITStrackRef[1];
 
-                LOG(info) << "V0 pos lab: " << v0PosRef[0] << " " << v0PosRef[1] << ", V0 neg lab: " << v0NegRef[0] << " " << v0NegRef[1] << ", ITS ref: " << ITStrackRef[0] << " " << ITStrackRef[1];
+                // LOG(info) << "V0 pos lab: " << v0PosRef[0] << " " << v0PosRef[1] << ", V0 neg lab: " << v0NegRef[0] << " " << v0NegRef[1] << ", ITS ref: " << ITStrackRef[0] << " " << ITStrackRef[1];
                 if (v0PosRef[0] >= 0 && v0PosRef[1] >= 0 && v0NegRef[0] >= 0 && v0NegRef[1] >= 0)
                 {
-                    LOG(info) << "V0 pos mother: " << mcTracksMatrix[v0PosRef[0]][v0PosRef[1]].GetPdgCode();
-                    LOG(info) << "V0 neg mother: " << mcTracksMatrix[v0NegRef[0]][v0NegRef[1]].GetPdgCode();
+                    // LOG(info) << "V0 pos mother: " << mcTracksMatrix[v0PosRef[0]][v0PosRef[1]].GetPdgCode();
+                    // LOG(info) << "V0 neg mother: " << mcTracksMatrix[v0NegRef[0]][v0NegRef[1]].GetPdgCode();
                 }
                 else
                 {
-                    LOG(info) << "Mother not found!";
+                    // LOG(info) << "Mother not found!";
                 }
 
                 hChi2Bkg->Fill(hyperChi2);
@@ -463,7 +461,7 @@ void hypertrackStudy()
         }
     }
 
-    auto outFile = TFile("hypertrack_study.root", "recreate");
+    auto outFile = TFile("hypertrack_study_2.root", "recreate");
     hChi2Sgn->Write();
     hChi2Bkg->Write();
 
@@ -536,6 +534,15 @@ void hypertrackStudy()
     hRecHypMom->Draw("pe");
     cv4.Write();
 
+    auto cv0 = TCanvas("trackable_tracked_r", "", 1000, 1000);
+    hRecHypRadiusTracked->GetXaxis()->SetTitle("Radius (cm)");
+    hRecHypRadiusTracked->GetYaxis()->SetTitle("Efficiency_{trackable}");
+    hRecHypRadiusTracked->SetLineColor(kRed);
+    hRecHypRadiusTracked->SetLineWidth(2.);
+    hRecHypRadiusTrackab->Draw();
+    hRecHypRadiusTracked->Draw("same");
+    cv0.Write();
+
     hRecHypRadiusTracked->Divide(hRecHypRadiusTrackab);
     auto cv1 = TCanvas("trackable_efficiency_r", "", 1000, 1000);
     hRecHypRadiusTracked->GetXaxis()->SetTitle("Radius (cm)");
@@ -544,6 +551,18 @@ void hypertrackStudy()
     hRecHypRadiusTracked->SetLineWidth(2.);
     hRecHypRadiusTracked->Draw();
     cv1.Write();
+
+    hRecHypRadiusFakes->Write();
+    hRecHypRadiusFakes->Sumw2();
+    hRecHypRadiusFakes->Divide(hRecHypRadiusTrackab);
+    auto cv5 = TCanvas("fakes_efficiency_r", "", 1000, 1000);
+    hRecHypRadiusFakes->GetXaxis()->SetTitle("Radius (cm)");
+    hRecHypRadiusFakes->GetYaxis()->SetTitle("#fakes / #trackables");
+    hRecHypRadiusFakes->SetLineColor(kRed);
+    hRecHypRadiusFakes->SetLineWidth(2.);
+    hRecHypRadiusFakes->Draw("pe");
+    cv5.Write();
+
 
     hGenHypCt->Write();
     hRecHypRadiusTrackab->Write();
@@ -767,7 +786,6 @@ double calcMass(const V0 &v0)
 double calcMass(std::vector<o2::track::TrackParCovF> tracks)
 {
     std::vector<float> dauMasses = {2.80839160743, 0.13957};
-
     TLorentzVector moth, prong;
     std::array<float, 3> p;
     for (unsigned int i = 0; i < tracks.size(); i++)

@@ -1,33 +1,33 @@
 
 
 #if !defined(CLING) || defined(ROOTCLING)
-#include "SimulationDataFormat/MCTruthContainer.h"
+#include "ITSMFTSimulation/Hit.h"
 #include "SimulationDataFormat/MCCompLabel.h"
 #include "SimulationDataFormat/MCTrack.h"
-#include "ITSMFTSimulation/Hit.h"
+#include "SimulationDataFormat/MCTruthContainer.h"
 
+#include "DataFormatsITS/TrackITS.h"
+#include "DataFormatsITSMFT/CompCluster.h"
+#include "DataFormatsITSMFT/ROFRecord.h"
 #include "DataFormatsITSMFT/TopologyDictionary.h"
 #include "DetectorsCommonDataFormats/DetectorNameConf.h"
 #include "ITSBase/GeometryTGeo.h"
-#include "DataFormatsITS/TrackITS.h"
-#include "ReconstructionDataFormats/TrackTPCITS.h"
-#include "DataFormatsITSMFT/CompCluster.h"
-#include "DataFormatsITSMFT/ROFRecord.h"
 #include "ITStracking/IOUtils.h"
+#include "ReconstructionDataFormats/TrackTPCITS.h"
 
-#include <gsl/gsl>
-#include <TLorentzVector.h>
+#include "CommonDataFormat/RangeReference.h"
+#include "DetectorsVertexing/DCAFitterN.h"
 #include "TCanvas.h"
 #include "TFile.h"
 #include "TH1F.h"
 #include "TH2D.h"
-#include "TSystemDirectory.h"
+#include "TLegend.h"
 #include "TMath.h"
 #include "TString.h"
+#include "TSystemDirectory.h"
 #include "TTree.h"
-#include "TLegend.h"
-#include "CommonDataFormat/RangeReference.h"
-#include "DetectorsVertexing/DCAFitterN.h"
+#include <TLorentzVector.h>
+#include <gsl/gsl>
 
 #endif
 
@@ -55,24 +55,41 @@ enum kDauType
     kBach
 };
 
+const float XiMass = 1.32171;
 const int kDauPdgs[3] = {2212, 211, 211};
 const float kDauMasses[3] = {0.938272, 0.13957, 0.13957};
 const float kFirstDauMasses[2] = {1.115683, 0.13957};
 
+double calcLifetime(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
+                    int dauPDG);
 
-
-
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG);
-double calcDecLengthV0(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG);
-std::array<int, 2> matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel &lab, int dauPDG);
-std::array<int, 2> matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel &lab);
-std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel compLabel);
-int checkCascRef(std::array<int, 2> cascRef1, std::array<int, 2> cascRef2, std::array<int, 2> cascRef3, std::array<int, 2> &cascRef);
-std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, const std::vector<ITSCluster> &ITSClustersArray, std::vector<int> *ITSTrackClusIdx);
-std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel);
+double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
+                     int dauPDG);
+double calcDecLengthV0(std::vector<MCTrack> *MCTracks,
+                       const MCTrack &motherTrack, int dauPDG);
+std::array<int, 2>
+matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                 o2::MCCompLabel &lab, int dauPDG);
+std::array<int, 2>
+matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+              o2::MCCompLabel &lab);
+std::array<int, 2>
+matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                   o2::MCCompLabel compLabel);
+int checkCascRef(std::array<int, 2> cascRef1, std::array<int, 2> cascRef2,
+                 std::array<int, 2> cascRef3, std::array<int, 2> &cascRef);
+std::vector<ITSCluster>
+getTrackClusters(const o2::its::TrackITS &ITStrack,
+                 const std::vector<ITSCluster> &ITSClustersArray,
+                 std::vector<int> *ITSTrackClusIdx);
+std::array<int, 2>
+matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                  o2::MCCompLabel ITSlabel);
 double calcMass(std::vector<o2::track::TrackParCovF> tracks);
 
-std::array<int, 2> matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel &lab, int dauPDG)
+std::array<int, 2>
+matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                 o2::MCCompLabel &lab, int dauPDG)
 {
     std::array<int, 2> outArray{-1, -1};
 
@@ -82,7 +99,8 @@ std::array<int, 2> matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> 
     if (lab.isValid())
     {
         auto motherID = mcTracksMatrix[evID][trackID].getMotherTrackId();
-        if (motherID >= 0 && std::abs(mcTracksMatrix[evID][trackID].GetPdgCode()) == dauPDG)
+        if (motherID >= 0 &&
+            std::abs(mcTracksMatrix[evID][trackID].GetPdgCode()) == dauPDG)
         {
             auto v0MomPDG = mcTracksMatrix[evID][motherID].GetPdgCode();
             auto v0MomID = mcTracksMatrix[evID][motherID].getMotherTrackId();
@@ -101,7 +119,9 @@ std::array<int, 2> matchCascDauToMC(const std::vector<std::vector<o2::MCTrack>> 
     return outArray;
 }
 
-std::array<int, 2> matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel &lab)
+std::array<int, 2>
+matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+              o2::MCCompLabel &lab)
 {
     std::array<int, 2> outArray{-1, -1};
 
@@ -125,7 +145,8 @@ std::array<int, 2> matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mc
     return outArray;
 }
 
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG)
+double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
+                     int dauPDG)
 {
     auto idStart = motherTrack.getFirstDaughterTrackId();
     auto idStop = motherTrack.getLastDaughterTrackId();
@@ -137,19 +158,53 @@ double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
         auto dauTrack = MCTracks->at(iD);
         if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
         {
-            auto decLength = (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) *
-                                 (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) +
-                             (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) *
-                                 (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY());
+            auto decLength = (dauTrack.GetStartVertexCoordinatesX() -
+                              motherTrack.GetStartVertexCoordinatesX()) *
+                                 (dauTrack.GetStartVertexCoordinatesX() -
+                                  motherTrack.GetStartVertexCoordinatesX()) +
+                             (dauTrack.GetStartVertexCoordinatesY() -
+                              motherTrack.GetStartVertexCoordinatesY()) *
+                                 (dauTrack.GetStartVertexCoordinatesY() -
+                                  motherTrack.GetStartVertexCoordinatesY());
             return sqrt(decLength);
         }
     }
     return -1;
 }
 
+double calcLifetime(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
+                    int dauPDG)
+{
+    auto idStart = motherTrack.getFirstDaughterTrackId();
+    auto idStop = motherTrack.getLastDaughterTrackId();
 
+    if (idStart == -1 || idStop == -1)
+        return -1;
+    for (auto iD{idStart}; iD <= idStop; ++iD)
+    {
+        auto dauTrack = MCTracks->at(iD);
+        if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
+        {
+            auto decLength = (dauTrack.GetStartVertexCoordinatesX() -
+                              motherTrack.GetStartVertexCoordinatesX()) *
+                                 (dauTrack.GetStartVertexCoordinatesX() -
+                                  motherTrack.GetStartVertexCoordinatesX()) +
+                             (dauTrack.GetStartVertexCoordinatesY() -
+                              motherTrack.GetStartVertexCoordinatesY()) *
+                                 (dauTrack.GetStartVertexCoordinatesY() -
+                                  motherTrack.GetStartVertexCoordinatesY()) +
+                             (dauTrack.GetStartVertexCoordinatesZ() -
+                              motherTrack.GetStartVertexCoordinatesZ()) *
+                                 (dauTrack.GetStartVertexCoordinatesZ() -
+                                  motherTrack.GetStartVertexCoordinatesZ());
+            return sqrt(decLength)*XiMass/motherTrack.GetP();
+        }
+    }
+    return -1;
+}
 
-double calcDecLengthV0(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack, int dauPDG)
+double calcDecLengthV0(std::vector<MCTrack> *MCTracks,
+                       const MCTrack &motherTrack, int dauPDG)
 {
     auto idStart = motherTrack.getFirstDaughterTrackId();
     auto idStop = motherTrack.getLastDaughterTrackId();
@@ -176,12 +231,18 @@ double calcDecLengthV0(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrac
                 auto dauTrack = MCTracks->at(jD);
                 if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
                 {
-                    // LOG(info) << "DauX: " <<  dauTrack.GetStartVertexCoordinatesX() << ", dauY: " <<dauTrack.GetStartVertexCoordinatesY();
-                    // LOG(info) << "MomX: " << motherTrack.GetStartVertexCoordinatesX() << ", momY: " << motherTrack.GetStartVertexCoordinatesY();
-                    auto decLength = (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) *
-                                         (dauTrack.GetStartVertexCoordinatesX() - motherTrack.GetStartVertexCoordinatesX()) +
-                                     (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY()) *
-                                         (dauTrack.GetStartVertexCoordinatesY() - motherTrack.GetStartVertexCoordinatesY());
+                    // LOG(info) << "DauX: " <<  dauTrack.GetStartVertexCoordinatesX() <<
+                    // ", dauY: " <<dauTrack.GetStartVertexCoordinatesY(); LOG(info) <<
+                    // "MomX: " << motherTrack.GetStartVertexCoordinatesX() << ", momY: "
+                    // << motherTrack.GetStartVertexCoordinatesY();
+                    auto decLength = (dauTrack.GetStartVertexCoordinatesX() -
+                                      motherTrack.GetStartVertexCoordinatesX()) *
+                                         (dauTrack.GetStartVertexCoordinatesX() -
+                                          motherTrack.GetStartVertexCoordinatesX()) +
+                                     (dauTrack.GetStartVertexCoordinatesY() -
+                                      motherTrack.GetStartVertexCoordinatesY()) *
+                                         (dauTrack.GetStartVertexCoordinatesY() -
+                                          motherTrack.GetStartVertexCoordinatesY());
                     // LOG(info) << "Decay lengthV0: " << decLength;
                     return sqrt(decLength);
                 }
@@ -191,7 +252,9 @@ double calcDecLengthV0(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrac
     return -1;
 }
 
-std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel compLabel)
+std::array<int, 2>
+matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                   o2::MCCompLabel compLabel)
 {
     std::array<int, 2> compRef = {-1, -1};
     int trackID, evID, srcID;
@@ -204,7 +267,8 @@ std::array<int, 2> matchCompLabelToMC(const std::vector<std::vector<o2::MCTrack>
     return compRef;
 }
 
-int checkCascRef(std::array<int, 2> cascRef1, std::array<int, 2> cascRef2, std::array<int, 2> cascRef3, std::array<int, 2> &cascRef)
+int checkCascRef(std::array<int, 2> cascRef1, std::array<int, 2> cascRef2,
+                 std::array<int, 2> cascRef3, std::array<int, 2> &cascRef)
 {
 
     if (cascRef1[0] != -1 && cascRef1[1] != -1)
@@ -228,15 +292,17 @@ int checkCascRef(std::array<int, 2> cascRef1, std::array<int, 2> cascRef2, std::
     }
 }
 
-
-std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, o2::MCCompLabel ITSlabel)
+std::array<int, 2>
+matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
+                  o2::MCCompLabel ITSlabel)
 
 {
     std::array<int, 2> outArray = {-1, -1};
     int trackID, evID, srcID;
     bool fake;
     ITSlabel.get(trackID, evID, srcID, fake);
-    if (ITSlabel.isValid() && std::abs(mcTracksMatrix[evID][trackID].GetPdgCode()) == motherPDG)
+    if (ITSlabel.isValid() &&
+        std::abs(mcTracksMatrix[evID][trackID].GetPdgCode()) == motherPDG)
     {
         outArray = {evID, trackID};
     }
@@ -244,8 +310,10 @@ std::array<int, 2> matchITStracktoMC(const std::vector<std::vector<o2::MCTrack>>
     return outArray;
 }
 
-
-std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, const std::vector<ITSCluster> &ITSClustersArray, std::vector<int> *ITSTrackClusIdx)
+std::vector<ITSCluster>
+getTrackClusters(const o2::its::TrackITS &ITStrack,
+                 const std::vector<ITSCluster> &ITSClustersArray,
+                 std::vector<int> *ITSTrackClusIdx)
 {
 
     std::vector<ITSCluster> outVec;
@@ -258,7 +326,6 @@ std::vector<ITSCluster> getTrackClusters(const o2::its::TrackITS &ITStrack, cons
     return outVec;
 }
 
-
 double calcMass(std::vector<o2::track::TrackParCovF> tracks)
 {
     TLorentzVector moth, prong;
@@ -266,7 +333,7 @@ double calcMass(std::vector<o2::track::TrackParCovF> tracks)
     for (unsigned int i = 0; i < tracks.size(); i++)
     {
         auto &track = tracks[i];
-        auto mass = tracks.size()==2 ? kFirstDauMasses[i] : kDauMasses[i];
+        auto mass = tracks.size() == 2 ? kFirstDauMasses[i] : kDauMasses[i];
         track.getPxPyPzGlo(p);
         prong.SetVectM({p[0], p[1], p[2]}, mass);
         moth += prong;
