@@ -201,7 +201,7 @@ void cascadeReco()
                     auto &motherTrack = mcTracksMatrix[n][mcI];
                     hGenXiCounter->Fill(1);
                     hGenXiMom->Fill(motherTrack.GetPt());
-                    hGenXiRadius->Fill(calcDecLength(MCtracks, motherTrack, bachPDG));
+                    hGenXiRadius->Fill(calcDecLength(MCtracks, motherTrack));
                     hGenEta->Fill(motherTrack.GetEta());
                     hGenXiLifetime->Fill(calcLifetime(MCtracks, motherTrack, bachPDG));
                 }

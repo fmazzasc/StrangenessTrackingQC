@@ -63,8 +63,7 @@ const float kFirstDauMasses[2] = {1.115683, 0.13957};
 double calcLifetime(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
                     int dauPDG);
 
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
-                     int dauPDG);
+double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack);
 double calcDecLengthV0(std::vector<MCTrack> *MCTracks,
                        const MCTrack &motherTrack, int dauPDG);
 std::array<int, 2>
@@ -145,8 +144,7 @@ matchBachToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix,
     return outArray;
 }
 
-double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
-                     int dauPDG)
+double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack)
 {
     auto idStart = motherTrack.getFirstDaughterTrackId();
     auto idStop = motherTrack.getLastDaughterTrackId();
@@ -156,7 +154,7 @@ double calcDecLength(std::vector<MCTrack> *MCTracks, const MCTrack &motherTrack,
     for (auto iD{idStart}; iD <= idStop; ++iD)
     {
         auto dauTrack = MCTracks->at(iD);
-        if (std::abs(dauTrack.GetPdgCode()) == dauPDG)
+        if (std::abs(dauTrack.GetPdgCode()) == v0PDG)
         {
             auto decLength = (dauTrack.GetStartVertexCoordinatesX() -
                               motherTrack.GetStartVertexCoordinatesX()) *
