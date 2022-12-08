@@ -17,7 +17,7 @@ export O2DPG_ROOT=/home/fmazzasc/alice/O2DPG
 
 NWORKERS=${NWORKERS:-64}
 MODULES="--skipModules ZDC"
-SIMENGINE=${SIMENGINE:-TGeant3}
+SIMENGINE=${SIMENGINE:-TGeant4}
 NSIGEVENTS=${NSIGEVENTS:-600}
 NTIMEFRAMES=${NTIMEFRAMES:-20}
 INTRATE=${INTRATE:-50000}
@@ -30,5 +30,5 @@ ${O2DPG_ROOT}/MC/bin/o2dpg_sim_workflow.py -eCM ${ENERGY} -col ${SYSTEM} -gen ex
         -ini ${O2DPG_ROOT}/MC/config/PWGLF/ini/GeneratorLFXi${SYSTEM}.ini -field -5
 
 # run workflow
-python3 apply_cuts_to_json.py
+# python3 apply_cuts_to_json.py
 ${O2DPG_ROOT}/MC/bin/o2_dpg_workflow_runner.py -f workflow_mod.json -tt aod --cpu-limit 64
