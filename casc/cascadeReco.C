@@ -58,7 +58,7 @@ void cascadeReco()
     for (auto fileObj : *files)
     {
         std::string file = ((TSystemFile *)fileObj)->GetName();
-        if (file.substr(0, 3) == "tf1")
+        if (file.substr(0, 3) == "tf2")
         {
             dirs.push_back(path + file);
             auto innerdir = (TSystemDirectory *)fileObj;
@@ -86,12 +86,12 @@ void cascadeReco()
     TH1D *hGenXiRadius = new TH1D("gen_casc_r", "; Radius (cm); Counts", 40, 0., 40.);
     TH1D *hGenXiLifetime = new TH1D("gen_casc_lifetime", "; Radius (cm); Counts", 40, 0., 40.);
 
-    TH1D *hGenXiMom = new TH1D("gen_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
+    TH1D *hGenXiMom = new TH1D("gen_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 20, 1,7);
     TH1D *hGenEta = new TH1D("gen_casc_eta", "; #eta; Counts", 40, -2.5, 2.5);
 
 
     TH1D *hRecXiRadius = new TH1D("rec_casc_r", "; Radius (cm); Counts", 40, 0., 40.);
-    TH1D *hRecXiMom = new TH1D("rec_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 40, 1, 10);
+    TH1D *hRecXiMom = new TH1D("rec_casc_pt", "; #it{p}_{T}^{gen} (GeV/#it{c}); Counts", 20, 1,7);
     TH1D *hFakeAssocCounter = new TH1D("Fake assoc counter", ";Fake assoc counter; Counts", 1, 0.5, 1.5);
 
     TH1D *hRecXiCounter = new TH1D("Rec Xi counter", "; ; Counts", 1, 0.5, 1.5);
@@ -278,7 +278,7 @@ void cascadeReco()
         }
     }
 
-    auto outFile = TFile("cascade_reco_after.root", "recreate");
+    auto outFile = TFile("cascade_reco_after_2.root", "recreate");
 
     hResV0histo->Write();
     hHyperhisto->Write();

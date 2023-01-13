@@ -4,9 +4,9 @@ import json
 from joblib import Parallel, delayed
 
 os.environ['O2_INFOLOGGER_OPTIONS'] = 'floodProtection=0'
-debug_level = "info"
-base_path = "/data/fmazzasc/its_data/sim/MB_PbPB"
-str_tracking_params = ''
+debug_level = "debug"
+base_path = "/data/fmazzasc/its_data/sim/xi"
+str_tracking_params = 'strtracker.mVertexMatching=true'
 
 def get_hbf_utils_from_json(json_file):
     out_list = []
@@ -34,8 +34,10 @@ dirs = os.listdir(base_path)
 config_key_values = str_tracking_params
 config_key_values += ";" + get_hbf_utils_from_json(f"{base_path}/workflow.json")
 for dire in dirs:
-    if not dire.startswith('tf'):
+    if not dire.startswith('tf2'):
         continue
+    # if int(dire.split('tf')[1]) > 1:
+    #     continue
     path = base_path + '/' + dire
     tf_paths.append(path)
     os.chdir(path)
