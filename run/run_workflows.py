@@ -59,9 +59,11 @@ def run_strangeness_tracking(dire, debug_level='info', config_key_values=""):
 
 def run_aod_producer(dire, params , debug_level='info'):
     os.chdir(dire)
+    if os.path.exists('AO2D.root'):
+        os.remove('AO2D.root')
     os.system(f'o2-aod-producer-workflow -b {params}  --infologger-severity {debug_level}')
  
 
 
 results = Parallel(n_jobs=len(tf_paths))(delayed(run_strangeness_tracking)(dire, debug_level, config_key_values_str) for dire in tf_paths)
-# results = Parallel(n_jobs=len(tf_paths))(delayed(run_aod_producer)(dire, aod_producer_params, debug_level) for dire in tf_paths)
+results = Parallel(n_jobs=len(tf_paths))(delayed(run_aod_producer)(dire, aod_producer_params, debug_level) for dire in tf_paths)
