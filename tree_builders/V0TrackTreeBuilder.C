@@ -2,6 +2,7 @@
 
 #include "SimulationDataFormat/MCTruthContainer.h"
 #include "SimulationDataFormat/MCCompLabel.h"
+#include "SimulationDataFormat/MCEventLabel.h"
 #include "SimulationDataFormat/MCTrack.h"
 #include "ITSMFTSimulation/Hit.h"
 
@@ -79,8 +80,8 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
         std::string file = ((TSystemFile *)fileObj)->GetName();
         if (file.substr(0, 2) == "tf")
         {
-            // if (stoi(file.substr(2)) > 1)
-            //     continue;
+            if (stoi(file.substr(2)) > 1)
+                continue;
             dirs.push_back(path + "/" + file);
             auto innerdir = (TSystemDirectory *)fileObj;
             auto innerfiles = innerdir->GetListOfFiles();
@@ -95,16 +96,24 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
         }
     }
 
-    TFile outFile = TFile(Form("TrackedV0Tree%.root", outSuffix.data()), "recreate");
+    TFile outFile = TFile(Form("TrackedV0Tree%s.root", outSuffix.data()), "recreate");
     TTree *outTree = new TTree("V0Tree", "V0Tree");
-    float gPt, gCt, gR2, recoPt, recoR2, recoMass, ITStrackPt, trackedPt, trackedR2, trackedMass;
+    float gPt, gCt, gR2, gX, gY, gZ, recoPt, recoR2, recoMass, ITStrackPt, trackedPt, trackedR2, trackedMass;
     float recoDCAXY, recoDCAZ, trackedDCAXY, trackedDCAZ;
-    bool isTrueV0, isTrackedV0, isTrueV0Track, isV0Trackable, isDuplicated;
+    float recoPvX, recoPvY, recoPvZ;
+    bool isTrueVertex, isTrueV0, isTrackedV0, isTrueV0Track, isV0Trackable, isDuplicated;
 
+    outTree->Branch("gX", &gX);
+    outTree->Branch("gY", &gY);
+    outTree->Branch("gZ", &gZ);
     outTree->Branch("gPt", &gPt);
     outTree->Branch("gCt", &gCt);
     outTree->Branch("gR2", &gR2);
     outTree->Branch("isTrueV0", &isTrueV0);
+    outTree->Branch("isTrueVertex", &isTrueVertex);
+    outTree->Branch("recoPvX", &recoPvX);
+    outTree->Branch("recoPvY", &recoPvY);
+    outTree->Branch("recoPvZ", &recoPvZ);
     outTree->Branch("recoPt", &recoPt);
     outTree->Branch("recoR2", &recoR2);
     outTree->Branch("recoMass", &recoMass);
@@ -196,6 +205,8 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
         std::vector<o2::its::TrackITS> *ITStracks = nullptr;
 
         // Labels
+        std::vector<o2::MCEventLabel> *pvMcArr = nullptr;
+
         std::vector<o2::MCCompLabel> *labITSvec = nullptr;
         std::vector<o2::MCCompLabel> *labTPCvec = nullptr;
         std::vector<o2::MCCompLabel> *labITSTPCvec = nullptr;
@@ -218,7 +229,9 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
         treeSecondaries->SetBranchAddress("Cascades", &cascVec);
         treeSecondaries->SetBranchAddress("V0s", &v0Vec);
         treeMCTracks->SetBranchAddress("MCTrack", &MCtracks);
+
         treePrimaryVertex->SetBranchAddress("PrimaryVertex", &primVertices);
+        treePrimaryVertex->SetBranchAddress("PVMCTruth", &pvMcArr);
 
         treeITS->SetBranchAddress("ITSTrackMCTruth", &labITSvec);
         treeITS->SetBranchAddress("ITSTrack", &ITStracks);
@@ -276,8 +289,9 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
 
                 // default tree values
                 gPt = -1, gCt = -1, gR2 = -1, recoPt = -1, recoR2 = -1, recoMass = -1, ITStrackPt = -1, trackedPt = -1, trackedR2 = -1, trackedMass = -1;
+                recoPvX = -1, recoPvY = -1, recoPvZ = -1;
                 recoDCAXY = -1, recoDCAZ = -1, trackedDCAXY = -1, trackedDCAZ = -1;
-                isTrueV0 = false, isTrackedV0 = false, isTrueV0Track = false, isV0Trackable = false, isDuplicated = false;
+                isTrueVertex = false, isTrueV0 = false, isTrackedV0 = false, isTrueV0Track = false, isV0Trackable = false, isDuplicated = false;
 
                 auto &v0 = v0Vec->at(iV0Vec);
                 bool isMatter = calcV0alpha(v0) > 0;
@@ -288,6 +302,8 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
                 recoMass = isMatter ? calcMass(v0, firstDaughterPDG, secondDaughterPDG) : calcMass(v0, secondDaughterPDG, firstDaughterPDG);
 
                 auto &primaryVertex = primVertices->at(v0.getVertexID());
+                auto &pvLabel = pvMcArr->at(v0.getVertexID());
+
                 int itsIdx = -1; // loop over ITS track for signal V0s
 
                 if (v0MCref[0] != -1 && v0MCref[1] != -1)
@@ -296,6 +312,13 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
 
                     isTrueV0 = true;
                     auto &mcV0 = mcTracksMatrix[v0MCref[0]][v0MCref[1]];
+                    if (pvLabel.getEventID() == v0MCref[0])
+                        isTrueVertex = true;
+
+                    recoPvX = primaryVertex.getX();
+                    recoPvY = primaryVertex.getY();
+                    recoPvZ = primaryVertex.getZ();
+
                     gPt = mcV0.GetPt();
                     gR2 = strUtils.calcR2(&mcTracksMatrix[v0MCref[0]], mcV0);
                     gCt = strUtils.calcLifetime(&mcTracksMatrix[v0MCref[0]], mcV0);

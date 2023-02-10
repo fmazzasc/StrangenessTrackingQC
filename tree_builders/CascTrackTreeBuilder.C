@@ -2,6 +2,7 @@
 
 #include "SimulationDataFormat/MCTruthContainer.h"
 #include "SimulationDataFormat/MCCompLabel.h"
+#include "SimulationDataFormat/MCEventLabel.h"
 #include "SimulationDataFormat/MCTrack.h"
 #include "ITSMFTSimulation/Hit.h"
 
@@ -58,13 +59,10 @@ using Vec3 = ROOT::Math::SVector<double, 3>;
 using StrangeTrack = o2::strangeness_tracking::StrangeTrack;
 
 const int motherPDG = 3334;
-const int firstDaughterPDG = 3122; // pdg of the V0 
-const int secondDaughterPDG = 321; // pdg of the bachelor 
-const int firstV0dauPDG = 2212; // pdg of the V0 daughter
-const int secondV0dauPDG = 211; // pdg of the V0 daughter
-
-
-
+const int firstDaughterPDG = 3122; // pdg of the V0
+const int secondDaughterPDG = 321; // pdg of the bachelor
+const int firstV0dauPDG = 2212;    // pdg of the V0 daughter
+const int secondV0dauPDG = 211;    // pdg of the V0 daughter
 
 std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc);
 double calcCascAlpha(const Cascade &cascade);
@@ -104,12 +102,17 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
     TTree *outTree = new TTree("CascTree", "CascTree");
     float gPt, gCt, gR2, recoPt, recoR2, recoMass, ITStrackPt, trackedPt, trackedR2, trackedMass;
     float recoDCAXY, recoDCAZ, trackedDCAXY, trackedDCAZ;
-    bool isTrueCasc, isTrackedCasc, isTrueCascTrack, isCascTrackable, isDuplicated;
+    float recoPvX, recoPvY, recoPvZ;
+    bool isTrueVertex, isTrueCasc, isTrackedCasc, isTrueCascTrack, isCascTrackable, isDuplicated;
 
     outTree->Branch("gPt", &gPt);
     outTree->Branch("gCt", &gCt);
     outTree->Branch("gR2", &gR2);
     outTree->Branch("isTrueCasc", &isTrueCasc);
+    outTree->Branch("isTrueVertex", &isTrueVertex);
+    outTree->Branch("recoPvX", &recoPvX);
+    outTree->Branch("recoPvY", &recoPvY);
+    outTree->Branch("recoPvZ", &recoPvZ);
     outTree->Branch("recoPt", &recoPt);
     outTree->Branch("recoR2", &recoR2);
     outTree->Branch("recoMass", &recoMass);
@@ -201,6 +204,7 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
         std::vector<o2::its::TrackITS> *ITStracks = nullptr;
 
         // Labels
+        std::vector<o2::MCEventLabel> *pvMcArr = nullptr;
         std::vector<o2::MCCompLabel> *labITSvec = nullptr;
         std::vector<o2::MCCompLabel> *labTPCvec = nullptr;
         std::vector<o2::MCCompLabel> *labITSTPCvec = nullptr;
@@ -224,6 +228,7 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
         treeSecondaries->SetBranchAddress("V0s", &v0Vec);
         treeMCTracks->SetBranchAddress("MCTrack", &MCtracks);
         treePrimaryVertex->SetBranchAddress("PrimaryVertex", &primVertices);
+        treePrimaryVertex->SetBranchAddress("PVMCTruth", &pvMcArr);
 
         treeITS->SetBranchAddress("ITSTrackMCTruth", &labITSvec);
         treeITS->SetBranchAddress("ITSTrack", &ITStracks);
@@ -281,8 +286,9 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
 
                 // default tree values
                 gPt = -1, gCt = -1, gR2 = -1, recoPt = -1, recoR2 = -1, recoMass = -1, ITStrackPt = -1, trackedPt = -1, trackedR2 = -1, trackedMass = -1;
+                recoPvX = -1, recoPvY = -1, recoPvZ = -1;
                 recoDCAXY = -1, recoDCAZ = -1, trackedDCAXY = -1, trackedDCAZ = -1;
-                isTrueCasc = false, isTrackedCasc = false, isTrueCascTrack = false, isCascTrackable = false, isDuplicated = false;
+                isTrueVertex = false, isTrueCasc = false, isTrackedCasc = false, isTrueCascTrack = false, isCascTrackable = false, isDuplicated = false;
 
                 auto &casc = cascVec->at(iCascVec);
                 bool isMatter = calcCascAlpha(casc) > 0;
@@ -293,6 +299,7 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
                 recoMass = isMatter ? calcMass(casc, firstDaughterPDG, secondDaughterPDG) : calcMass(casc, secondDaughterPDG, firstDaughterPDG);
 
                 auto &primaryVertex = primVertices->at(casc.getVertexID());
+                auto &pvLabel = pvMcArr->at(casc.getVertexID());
                 int itsIdx = -1; // loop over ITS track for signal V0s
 
                 if (cascMCref[0] != -1 && cascMCref[1] != -1)
@@ -302,6 +309,13 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
 
                     isTrueCasc = true;
                     auto &mcCasc = mcTracksMatrix[cascMCref[0]][cascMCref[1]];
+                    if (pvLabel.getEventID() == cascMCref[0])
+                        isTrueVertex = true;
+
+                    recoPvX = primaryVertex.getX();
+                    recoPvY = primaryVertex.getY();
+                    recoPvZ = primaryVertex.getZ();
+
                     gPt = mcCasc.GetPt();
                     gR2 = strUtils.calcR2(&mcTracksMatrix[cascMCref[0]], mcCasc);
                     gCt = strUtils.calcLifetime(&mcTracksMatrix[cascMCref[0]], mcCasc);
