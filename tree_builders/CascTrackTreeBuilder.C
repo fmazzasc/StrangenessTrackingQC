@@ -269,7 +269,6 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
                 }
             }
         }
-        LOG(info) << "MC tracks matrix filled";
 
         // Starting matching Cascades and ITS tracks
         int counterV0 = 0;
@@ -305,7 +304,6 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
                 if (cascMCref[0] != -1 && cascMCref[1] != -1)
                 {
                     counterV0++;
-                    LOG(info) << "Cascade found: " << counterV0 << " / " << cascVec->size() << " in frame " << frame;
 
                     isTrueCasc = true;
                     auto &mcCasc = mcTracksMatrix[cascMCref[0]][cascMCref[1]];

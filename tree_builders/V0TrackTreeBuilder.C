@@ -272,7 +272,7 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
                 }
             }
         }
-        LOG(info) << "MC tracks matrix filled";
+
 
         // Starting matching V0s and ITS tracks
         int counterV0 = 0;
