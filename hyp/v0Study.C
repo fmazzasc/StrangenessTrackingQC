@@ -52,7 +52,7 @@ double calcMass(const V0 &v0, double dauMass[2], int dauCharges[2]);
 void v0Study()
 {
     // std::string path = "/data/fmazzasc/its_data/sim/lambdas/";
-    std::string path = "/data/fmazzasc/its_data/sim/hyp_ab_new/";
+    std::string path = "/data/fmazzasc/its_data/sim/hyp_2_body_cut/";
 
     // std::string path = "alice/run_sim/";
 
@@ -294,9 +294,9 @@ void v0Study()
             histV0radiusRes->Fill(genRad, (recRad - genRad) / genRad);
 
             counter++;
-            std::cout << "---------------------------------" << std::endl;
-            std::cout << "Counter: " << counter << std::endl;
-            std::cout << evIDvec[0] << ", " << motherIDvec[0] << ", " << motherIDvec[1] << std::endl;
+            // std::cout << "---------------------------------" << std::endl;
+            // std::cout << "Counter: " << counter << std::endl;
+            // std::cout << evIDvec[0] << ", " << motherIDvec[0] << ", " << motherIDvec[1] << std::endl;
             std::cout << "Common mother found, PDG: " << mcTracksMatrix[evIDvec[0]][motherIDvec[0]].GetPdgCode() << std::endl;
             std::cout << "Daughter 0, PDG: " << pdg0 << ", Pt: " << mcTracksMatrix[evIDvec[0]][daughterIDvec[0]].GetPt() << std::endl;
             std::cout << "Daughter 0, Rec Pt: " << v0.getProng(0).getPt() << ", Track type: " << v0.getProngID(0).getSourceName() << std::endl;

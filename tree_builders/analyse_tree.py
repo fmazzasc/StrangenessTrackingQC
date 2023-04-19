@@ -32,7 +32,7 @@ mom_reso = ROOT.TH2F("mom_reso", "mom_reso", 40, 0, 10, 40, -0.1, 0.1)
 ############################################
 
 
-df_v0 = uproot.open("TrackedV0Tree_hyp.root")["V0Tree"].arrays(library="pd")
+df_v0 = uproot.open("TrackedV0Tree.root")["V0Tree"].arrays(library="pd")
 df_v0.eval("decR = sqrt(gR2)", inplace=True)
 df_v0.eval("reso = (gPt - recoPt)/gPt", inplace=True)
 
@@ -115,8 +115,8 @@ fit_function2 = ROOT.RooAddPdf('total_pdf2', 'signal + background 2', ROOT.RooAr
 
 outfile = ROOT.TFile("histos.root", "recreate")
 
-_, _, frame1 = fit_and_plot(mass_v0, mass, fit_function1, signal, background1, sigma, mu, n)
-_, _, frame2 = fit_and_plot(mass_tracked, mass, fit_function2, signal, background2, sigma, mu, n)
+# _, _, frame1 = fit_and_plot(mass_v0, mass, fit_function1, signal, background1, sigma, mu, n)
+# _, _, frame2 = fit_and_plot(mass_tracked, mass, fit_function2, signal, background2, sigma, mu, n)
 
 
 ## rescale background and signal
@@ -137,21 +137,21 @@ sum_histo.Write()
 
 
 
-cv1 = ROOT.TCanvas()
-frame1.Draw()
-leg1 = ROOT.TLegend(0.52,0.52,0.93,0.76)
-leg1.AddEntry("data","{}_{#Lambda}^{3}H + {}_{#bar{#Lambda}}^{3}#bar{H}", "PE")
-leg1.AddEntry("fit_func","Signal + Background", "L")
-leg1.AddEntry("bkg","Background", "L")
-leg1.SetBorderSize(0)
-leg1.SetFillStyle(0)
-leg1.SetTextFont(42)
-leg1.Draw()
-cv1.Write()
+# cv1 = ROOT.TCanvas()
+# frame1.Draw()
+# leg1 = ROOT.TLegend(0.52,0.52,0.93,0.76)
+# leg1.AddEntry("data","{}_{#Lambda}^{3}H + {}_{#bar{#Lambda}}^{3}#bar{H}", "PE")
+# leg1.AddEntry("fit_func","Signal + Background", "L")
+# leg1.AddEntry("bkg","Background", "L")
+# leg1.SetBorderSize(0)
+# leg1.SetFillStyle(0)
+# leg1.SetTextFont(42)
+# leg1.Draw()
+# cv1.Write()
 
-cv2 = ROOT.TCanvas()
-frame2.Draw()
-cv2.Write()
+# cv2 = ROOT.TCanvas()
+# frame2.Draw()
+# cv2.Write()
 
 mass_v0_bkg.Write()
 mass_tracked.Write()

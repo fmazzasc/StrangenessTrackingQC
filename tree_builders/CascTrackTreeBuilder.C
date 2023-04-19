@@ -4,9 +4,7 @@
 #include "SimulationDataFormat/MCCompLabel.h"
 #include "SimulationDataFormat/MCEventLabel.h"
 #include "SimulationDataFormat/MCTrack.h"
-#include "ITSMFTSimulation/Hit.h"
 
-#include "DataFormatsITSMFT/TopologyDictionary.h"
 #include "DetectorsCommonDataFormats/DetectorNameConf.h"
 #include "ITSBase/GeometryTGeo.h"
 #include "DataFormatsITS/TrackITS.h"
@@ -17,10 +15,7 @@
 
 #include "ReconstructionDataFormats/PrimaryVertex.h"
 #include "ReconstructionDataFormats/VtxTrackIndex.h"
-
-#include <gsl/gsl>
 #include <TLorentzVector.h>
-#include "TCanvas.h"
 #include "TFile.h"
 #include "TH1F.h"
 #include "TH2D.h"
@@ -28,14 +23,10 @@
 #include "TMath.h"
 #include "TString.h"
 #include "TTree.h"
-#include "TLegend.h"
-#include "CommonDataFormat/RangeReference.h"
-#include "DetectorsVertexing/DCAFitterN.h"
 #include "StrangenessTracking/StrangenessTracker.h"
-#include "ReconstructionDataFormats/PID.h"
 #include "ReconstructionDataFormats/V0.h"
 #include "ReconstructionDataFormats/Cascade.h"
-#include "StrangenessTracking/StrangenessTracker.h"
+#include "ReconstructionDataFormats/StrangeTrack.h"
 #include "GPUCommonArray.h"
 #include "DetectorsBase/Propagator.h"
 
@@ -56,14 +47,25 @@ using namespace o2::itsmft;
 using CompClusterExt = o2::itsmft::CompClusterExt;
 using ITSCluster = o2::BaseCluster<float>;
 using Vec3 = ROOT::Math::SVector<double, 3>;
-using StrangeTrack = o2::strangeness_tracking::StrangeTrack;
+using StrangeTrack = o2::dataformats::StrangeTrack;
 
-const int motherPDG = 3334;
+const int motherPDG = 3312;
 const int firstDaughterPDG = 3122; // pdg of the V0
-const int secondDaughterPDG = 321; // pdg of the bachelor
+const int secondDaughterPDG = 211; // pdg of the bachelor
 const int firstV0dauPDG = 2212;    // pdg of the V0 daughter
 const int secondV0dauPDG = 211;    // pdg of the V0 daughter
 
+struct GPart
+{
+    float gPt, gCt, gR2, recoPt, recoR2, recoMass, ITStrackPt, trackedPt, trackedR2, trackedMass;
+    float recoDCAXY, recoDCAZ, trackedDCAXY, trackedDCAZ;
+    float recoPvX, recoPvY, recoPvZ;
+    bool isTrueVertex = false, isReconstructed = false, isStTracked = false, isFakeMatching = false, hasITSTrack = false, isDuplicated = false;
+    bool isTrueCasc = false;
+    int itsRef = -1;
+};
+
+bool fillStrangeTrackInfo(GPart &part, std::vector<StrangeTrack> *strangeTrackVec, int cascID, o2::dataformats::PrimaryVertex &pv);
 std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc);
 double calcCascAlpha(const Cascade &cascade);
 double calcMass(const Cascade &casc, int firstV0dauPDG, int secondV0dauPDG);
@@ -82,7 +84,7 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
         std::string file = ((TSystemFile *)fileObj)->GetName();
         if (file.substr(0, 2) == "tf")
         {
-            // if (stoi(file.substr(2)) > 1)
+            // if (stoi(file.substr(2)) > 100)
             //     continue;
             dirs.push_back(path + "/" + file);
             auto innerdir = (TSystemDirectory *)fileObj;
@@ -98,43 +100,12 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
         }
     }
 
+    // dump the gPart structures to a tree
     TFile outFile = TFile(Form("TrackedCascTree%s.root", outSuffix.data()), "recreate");
     TTree *outTree = new TTree("CascTree", "CascTree");
-    float gPt, gCt, gR2, recoPt, recoR2, recoMass, ITStrackPt, trackedPt, trackedR2, trackedMass;
-    float recoDCAXY, recoDCAZ, trackedDCAXY, trackedDCAZ;
-    float recoPvX, recoPvY, recoPvZ;
-    bool isTrueVertex, isTrueCasc, isTrackedCasc, isTrueCascTrack, isCascTrackable, isDuplicated;
-
-    outTree->Branch("gPt", &gPt);
-    outTree->Branch("gCt", &gCt);
-    outTree->Branch("gR2", &gR2);
-    outTree->Branch("isTrueCasc", &isTrueCasc);
-    outTree->Branch("isTrueVertex", &isTrueVertex);
-    outTree->Branch("recoPvX", &recoPvX);
-    outTree->Branch("recoPvY", &recoPvY);
-    outTree->Branch("recoPvZ", &recoPvZ);
-    outTree->Branch("recoPt", &recoPt);
-    outTree->Branch("recoR2", &recoR2);
-    outTree->Branch("recoMass", &recoMass);
-    outTree->Branch("ITStrackPt", &ITStrackPt);
-    outTree->Branch("isCascTrackable", &isCascTrackable);
-    outTree->Branch("isTrackedCasc", &isTrackedCasc);
-    outTree->Branch("isTrueCascTrack", &isTrueCascTrack);
-    outTree->Branch("isDuplicated", &isDuplicated);
-    outTree->Branch("trackedPt", &trackedPt);
-    outTree->Branch("trackedR2", &trackedR2);
-    outTree->Branch("trackedMass", &trackedMass);
-    outTree->Branch("recoDCAXY", &recoDCAXY);
-    outTree->Branch("recoDCAZ", &recoDCAZ);
-    outTree->Branch("trackedDCAXY", &trackedDCAXY);
-    outTree->Branch("trackedDCAZ", &trackedDCAZ);
-
-    // create MC tree for efficiency calculation
-    TTree *mcTree = new TTree("MCTree", "MCTree");
-    float mcPt, mcCt, mcR2;
-    mcTree->Branch("mcPt", &mcPt);
-    mcTree->Branch("mcCt", &mcCt);
-    mcTree->Branch("mcR2", &mcR2);
+    // declare branch
+    GPart outputPart;
+    outTree->Branch("Casc", &outputPart);
 
     // Geometry
     o2::base::GeometryManager::loadGeometry(dirs[0] + "/o2sim_geometry.root");
@@ -144,6 +115,7 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
     const auto grp = o2::parameters::GRPObject::loadFrom(dirs[0] + "/" + "o2sim_grp.root");
     o2::base::Propagator::initFieldFromGRP(grp);
     auto propagator = o2::base::Propagator::Instance();
+    LOG(info) << "Propagator mag field: " << int(propagator->getNominalBz()) << " kG";
 
     int counter = 0;
     for (unsigned int i = 0; i < dirs.size(); i++)
@@ -247,28 +219,44 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
         // define detector map
         std::map<std::string, std::vector<o2::MCCompLabel> *> map{{"ITS", labITSvec}, {"TPC", labTPCvec}, {"ITS-TPC", labITSTPCvec}, {"TPC-TOF", labTPCTOFvec}, {"TPC-TRD", labTPCTRDvec}, {"ITS-TPC-TOF", labITSTPCTOFvec}, {"ITS-TPC-TRD", labITSTPCTRDvec}, {"TPC-TRD-TOF", labTPCTRDTOFvec}, {"ITS-TPC-TRD-TOF", labITSTPCTRDTOFvec}};
 
+        // bkg vector
+        std::vector<GPart> bkgVec;
+
         // fill MC matrix
-        std::vector<std::vector<o2::MCTrack>> mcTracksMatrix;
+        std::vector<std::vector<MCTrack>> mcTracksMatrix;
+        std::vector<std::vector<GPart>> gPartMatrix;
 
         auto nev = treeMCTracks->GetEntriesFast();
         mcTracksMatrix.resize(nev);
+        gPartMatrix.resize(nev);
         for (int n = 0; n < nev; n++)
         { // loop over MC events
             treeMCTracks->GetEvent(n);
             mcTracksMatrix[n].resize(MCtracks->size());
+            gPartMatrix[n].resize(MCtracks->size());
             for (unsigned int mcI{0}; mcI < MCtracks->size(); ++mcI)
             {
-                mcTracksMatrix[n][mcI] = MCtracks->at(mcI);
-                if (abs(mcTracksMatrix[n][mcI].GetPdgCode()) == motherPDG)
-                {
+                GPart gPart;
+                auto &mcTrack = MCtracks->at(mcI);
 
-                    mcPt = mcTracksMatrix[n][mcI].GetPt();
-                    mcR2 = strUtils.calcR2(MCtracks, mcTracksMatrix[n][mcI]);
-                    mcCt = strUtils.calcLifetime(MCtracks, mcTracksMatrix[n][mcI]);
-                    mcTree->Fill();
+                if (abs(mcTrack.GetPdgCode()) == motherPDG)
+                {
+                    gPart.gPt = mcTrack.GetPt();
+                    gPart.gR2 = strUtils.calcR2(MCtracks, mcTrack);
+                    gPart.gCt = strUtils.calcLifetime(MCtracks, mcTrack);
                 }
+                else
+                {
+                    gPart.gPt = -1;
+                    gPart.gR2 = -1;
+                    gPart.gCt = -1;
+                }
+
+                gPartMatrix[n][mcI] = gPart;
+                mcTracksMatrix[n][mcI] = mcTrack;
             }
         }
+        LOG(info) << "MC matrix filled";
 
         // Starting matching Cascades and ITS tracks
         int counterV0 = 0;
@@ -281,126 +269,115 @@ void CascTrackTreeBuilder(std::string path, std::string outSuffix = "")
 
             for (unsigned int iCascVec = 0; iCascVec < cascVec->size(); iCascVec++)
             {
-                bool isTreeFilled = false;
-
-                // default tree values
-                gPt = -1, gCt = -1, gR2 = -1, recoPt = -1, recoR2 = -1, recoMass = -1, ITStrackPt = -1, trackedPt = -1, trackedR2 = -1, trackedMass = -1;
-                recoPvX = -1, recoPvY = -1, recoPvZ = -1;
-                recoDCAXY = -1, recoDCAZ = -1, trackedDCAXY = -1, trackedDCAZ = -1;
-                isTrueVertex = false, isTrueCasc = false, isTrackedCasc = false, isTrueCascTrack = false, isCascTrackable = false, isDuplicated = false;
 
                 auto &casc = cascVec->at(iCascVec);
                 bool isMatter = calcCascAlpha(casc) > 0;
                 auto cascMCref = matchCascToMC(mcTracksMatrix, map, v0Vec, casc);
 
-                recoPt = casc.getPt();
-                recoR2 = sqrt(casc.calcR2());
-                recoMass = isMatter ? calcMass(casc, firstDaughterPDG, secondDaughterPDG) : calcMass(casc, secondDaughterPDG, firstDaughterPDG);
-
                 auto &primaryVertex = primVertices->at(casc.getVertexID());
                 auto &pvLabel = pvMcArr->at(casc.getVertexID());
-                int itsIdx = -1; // loop over ITS track for signal V0s
 
                 if (cascMCref[0] != -1 && cascMCref[1] != -1)
                 {
-                    counterV0++;
 
-                    isTrueCasc = true;
-                    auto &mcCasc = mcTracksMatrix[cascMCref[0]][cascMCref[1]];
+                    auto &mcCasc = gPartMatrix[cascMCref[0]][cascMCref[1]];
                     if (pvLabel.getEventID() == cascMCref[0])
-                        isTrueVertex = true;
+                        mcCasc.isTrueVertex = true;
 
-                    recoPvX = primaryVertex.getX();
-                    recoPvY = primaryVertex.getY();
-                    recoPvZ = primaryVertex.getZ();
+                    mcCasc.isReconstructed = true;
 
-                    gPt = mcCasc.GetPt();
-                    gR2 = strUtils.calcR2(&mcTracksMatrix[cascMCref[0]], mcCasc);
-                    gCt = strUtils.calcLifetime(&mcTracksMatrix[cascMCref[0]], mcCasc);
+                    mcCasc.recoPt = casc.getPt();
+                    mcCasc.recoR2 = sqrt(casc.calcR2());
+                    mcCasc.recoMass = calcMass(casc, firstDaughterPDG, secondDaughterPDG);
+
+                    mcCasc.recoPvX = primaryVertex.getX();
+                    mcCasc.recoPvY = primaryVertex.getY();
+                    mcCasc.recoPvZ = primaryVertex.getZ();
 
                     gpu::gpustd::array<float, 2> dca{-999.f, -999.f};
                     if (propagator->propagateToDCA(primaryVertex.getXYZ(), casc, propagator->getNominalBz(), 2.f, o2::base::PropagatorF::MatCorrType::USEMatCorrLUT, &dca))
                     {
-                        recoDCAXY = dca[0];
-                        recoDCAZ = dca[1];
+                        mcCasc.recoDCAXY = dca[0];
+                        mcCasc.recoDCAZ = dca[1];
                     }
 
-                    // Matching ITS tracks to MC tracks and V0
-                    std::array<int, 2> ITSref = {-1, 1};
-                    o2::its::TrackITS ITStrack;
-
-                    for (unsigned int iITStrack = 0; iITStrack < ITStracks->size(); iITStrack++)
+                    // look for any strange track
+                    auto isStrangeTracked = fillStrangeTrackInfo(mcCasc, strangeTrackVec, iCascVec, primaryVertex);
+                    if (isStrangeTracked)
                     {
-                        auto &labITS = (*labITSvec)[iITStrack];
-                        auto &trackIdx = (*ITSTrackClusIdx)[iITStrack];
 
-                        ITSref = strUtils.matchITStracktoMC(mcTracksMatrix, labITS);
-                        ITStrack = (*ITStracks)[iITStrack];
+                        // match ITS track to MC
+                        auto &labITS = labITSvec->at(mcCasc.itsRef);
+                        auto ITSref = strUtils.matchITStracktoMC(mcTracksMatrix, labITS);
 
-                        if (ITSref[0] == cascMCref[0] && ITSref[1] == cascMCref[1])
+                        // check fake matching
+                        if (ITSref[0] != cascMCref[0] || ITSref[1] != cascMCref[1])
                         {
-                            LOG(info) << "++++++++++++++++";
-                            LOG(info) << "Casc + ITS track found! ";
-                            LOG(info) << "Casc Momentum: " << casc.getPt() << ", ITS track momentum: " << ITStrack.getPt();
-                            isCascTrackable = true;
-                            ITStrackPt = ITStrack.getPt();
-                            itsIdx = iITStrack;
-                            break;
+                            mcCasc.isFakeMatching = true;
                         }
                     }
                 }
 
-                // check whether the corresponding strange track is found: both signal and background checked
-
-                int cloneCounter = 0;
-                for (unsigned int iStTr = 0; iStTr < strangeTrackVec->size(); iStTr++)
+                else // this will fill the background vector
                 {
-                    auto &strangeTrack = strangeTrackVec->at(iStTr);
-                    auto &itsRef = strangeTrack.mITSRef;
-                    auto &cascRef = strangeTrack.mDecayRef;
-                    if (!(strangeTrack.mPartType == o2::strangeness_tracking::kCascade) || cascRef != int(iCascVec))
-                    {
-                        continue;
-                    }
-
-                    auto &sTrack = strangeTrack.mMother;
-                    isTrackedCasc = true;
-                    isDuplicated = cloneCounter > 0;
-                    trackedPt = sqrt(strangeTrack.decayMom[0] * strangeTrack.decayMom[0] + strangeTrack.decayMom[1] * strangeTrack.decayMom[1]);
-                    trackedR2 = strangeTrack.decayVtx[0] * strangeTrack.decayVtx[0] + strangeTrack.decayVtx[1] * strangeTrack.decayVtx[1];
-
-                    if (itsRef == int(itsIdx) && cascRef == int(iCascVec))
-                    {
-                        LOG(info) << "Strange track found! ";
-                        isTrueCascTrack = true;
-                        gpu::gpustd::array<float, 2> dcaT{-999.f, -999.f};
-                        if (propagator->propagateToDCA(primaryVertex.getXYZ(), sTrack, propagator->getNominalBz(), 2.f, o2::base::PropagatorF::MatCorrType::USEMatCorrLUT, &dcaT))
-                        {
-                            trackedDCAXY = dcaT[0];
-                            trackedDCAZ = dcaT[1];
-                        }
-                    }
-                    else
-                    {
-                        isTrueCascTrack = false;
-                    }
-                    outTree->Fill();
-                    isTreeFilled = true; // double filling if two strange tracks are associated to the same V0
-                    cloneCounter++;
+                    GPart bkgPart;
+                    bkgPart.isReconstructed = true;
+                    bkgPart.recoPt = casc.getPt();
+                    bkgPart.recoR2 = sqrt(casc.calcR2());
+                    bkgPart.recoMass = calcMass(casc, firstDaughterPDG, secondDaughterPDG);
+                    bkgPart.gPt = -1;
+                    bkgPart.gR2 = -1;
+                    bkgPart.gCt = -1;
+                    auto isStrangeTracked = fillStrangeTrackInfo(bkgPart, strangeTrackVec, iCascVec, primaryVertex);
+                    bkgPart.isFakeMatching = true;
+                    bkgVec.push_back(bkgPart);
                 }
+            }
+            LOG(info) << "Cascades matched";
 
-                if (!isTreeFilled)
+            // Finally, Check if the ITS track is available. Relevant only for signal
+
+            for (unsigned int iITStrack = 0; iITStrack < ITStracks->size(); iITStrack++)
+            {
+                std::array<int, 2> ITSref = {-1, 1};
+                auto &labITS = (*labITSvec)[iITStrack];
+                auto &trackIdx = (*ITSTrackClusIdx)[iITStrack];
+
+                ITSref = strUtils.matchITStracktoMC(mcTracksMatrix, labITS);
+                auto &ITStrack = ITStracks->at(iITStrack);
+
+                if (ITSref[0] != -1 && ITSref[1] != -1)
                 {
-                    outTree->Fill();
+                    auto &mcCasc = gPartMatrix[ITSref[0]][ITSref[1]];
+                    mcCasc.hasITSTrack = true;
+                    mcCasc.ITStrackPt = ITStrack.getPt();
                 }
+            }
+
+            // first loop over the signal
+            for (auto &part : gPartMatrix)
+            {
+                for (auto &mcPart : part)
+                {
+                    if (mcPart.gPt > 0)
+                    {
+                        outputPart = mcPart;
+                        outTree->Fill();
+                    }
+                }
+            }
+
+            // now loop over the background
+            for (auto &part : bkgVec)
+            {
+                outputPart = part;
+                outTree->Fill();
             }
         }
     }
-
     outFile.cd();
     outTree->Write();
-    mcTree->Write();
-}
+};
 
 std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mcTracksMatrix, std::map<std::string, std::vector<o2::MCCompLabel> *> &map, std::vector<V0> *v0vec, Cascade &casc)
 {
@@ -473,37 +450,22 @@ std::array<int, 2> matchCascToMC(const std::vector<std::vector<o2::MCTrack>> &mc
 
 double calcMass(const Cascade &casc, int firstDauPdg, int secondDauPdg)
 {
-    double dauMass[2];
-    int dauCharges[2];
+
     auto firstV0dau = TDatabasePDG::Instance()->GetParticle(firstDauPdg);
     auto secondV0dau = TDatabasePDG::Instance()->GetParticle(secondDauPdg);
-    if (firstDauPdg == 1000020030 || secondDauPdg == 1000020030)
-    {
-        int indexHe3 = firstDauPdg == 1000020030 ? 0 : 1;
-        dauMass[indexHe3] = 2.808391;
-        dauCharges[indexHe3] = 2;
-        dauMass[1 - indexHe3] = firstDauPdg == 1000020030 ? secondV0dau->Mass() : firstV0dau->Mass();
-        dauCharges[1 - indexHe3] = firstDauPdg == 1000020030 ? secondV0dau->Charge() / 3 : firstV0dau->Charge() / 3;
-    }
 
-    else
-    {
-        dauMass[0] = firstV0dau->Mass();
-        dauCharges[0] = firstV0dau->Charge();
-        dauMass[1] = secondV0dau->Mass();
-        dauCharges[1] = secondV0dau->Charge();
-    }
+    double dauMass[2] = {firstV0dau->Mass(), secondV0dau->Mass()};
 
-    std::vector<o2::dataformats::Cascade::Track> dauTracks = {casc.getProng(0), casc.getProng(1)};
+    std::vector<o2::dataformats::Cascade::Track> dauTracks = {casc.getV0Track(), casc.getBachelorTrack()};
     TLorentzVector moth, prong;
     std::array<float, 3> p;
+
     for (int i = 0; i < 2; i++)
     {
         auto &track = dauTracks[i];
         auto &mass = dauMass[i];
         track.getPxPyPzGlo(p);
-        int charge = dauCharges[i];
-        prong.SetVectM({charge * p[0], charge * p[1], charge * p[2]}, mass);
+        prong.SetVectM({p[0], p[1], p[2]}, mass);
         moth += prong;
     }
     return moth.M();
@@ -524,4 +486,40 @@ double calcCascAlpha(const Cascade &casc)
     Double_t lQlPos = momPos.Dot(momTot) / momTot.Mag();
 
     return (lQlPos - lQlNeg) / (lQlPos + lQlNeg);
+}
+
+bool fillStrangeTrackInfo(GPart &part, std::vector<StrangeTrack> *strangeTrackVec, int cascID, o2::dataformats::PrimaryVertex &pv)
+{
+    // check whether the corresponding strange track is found: both signal and background checked
+    bool isFound = false;
+    int index = -1;
+    for (unsigned int iStTr = 0; iStTr < strangeTrackVec->size(); iStTr++)
+    {
+        auto &strangeTrack = strangeTrackVec->at(iStTr);
+        if (int(strangeTrack.mDecayRef) == cascID)
+        {
+            isFound = true;
+            index = iStTr;
+            break;
+        }
+    }
+    if (!isFound)
+        return false;
+
+    auto &StrangeTrack = strangeTrackVec->at(index);
+    part.isStTracked = true;
+    part.trackedPt = sqrt(StrangeTrack.mDecayMom[0] * StrangeTrack.mDecayMom[0] + StrangeTrack.mDecayMom[1] * StrangeTrack.mDecayMom[1]);
+    part.trackedR2 = StrangeTrack.mDecayVtx[0] * StrangeTrack.mDecayVtx[0] + StrangeTrack.mDecayVtx[1] * StrangeTrack.mDecayVtx[1];
+
+    gpu::gpustd::array<float, 2> dcaT{-999.f, -999.f};
+    auto propagator = o2::base::Propagator::Instance();
+    if (propagator->propagateToDCA(pv.getXYZ(), StrangeTrack.mMother, propagator->getNominalBz(), 2.f, o2::base::PropagatorF::MatCorrType::USEMatCorrLUT, &dcaT))
+    {
+        part.trackedDCAXY = dcaT[0];
+        part.trackedDCAZ = dcaT[1];
+    }
+
+    part.itsRef = StrangeTrack.mITSRef;
+
+    return true;
 }

@@ -30,12 +30,13 @@
 #include "TTree.h"
 #include "TLegend.h"
 #include "CommonDataFormat/RangeReference.h"
-#include "DetectorsVertexing/DCAFitterN.h"
 #include "StrangenessTracking/StrangenessTracker.h"
 #include "ReconstructionDataFormats/PID.h"
 #include "ReconstructionDataFormats/V0.h"
 #include "ReconstructionDataFormats/Cascade.h"
 #include "StrangenessTracking/StrangenessTracker.h"
+#include "ReconstructionDataFormats/StrangeTrack.h"
+
 #include "GPUCommonArray.h"
 #include "DetectorsBase/Propagator.h"
 
@@ -56,7 +57,7 @@ using namespace o2::itsmft;
 using CompClusterExt = o2::itsmft::CompClusterExt;
 using ITSCluster = o2::BaseCluster<float>;
 using Vec3 = ROOT::Math::SVector<double, 3>;
-using StrangeTrack = o2::strangeness_tracking::StrangeTrack;
+using StrangeTrack = o2::dataformats::StrangeTrack;
 
 const int motherPDG = 1010010030;
 const int firstDaughterPDG = 1000020030;
@@ -364,7 +365,7 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
                     auto &strangeTrack = strangeTrackVec->at(iStTr);
                     auto &itsRef = strangeTrack.mITSRef;
                     auto &v0Ref = strangeTrack.mDecayRef;
-                    if (!(strangeTrack.mPartType == o2::strangeness_tracking::kV0) || v0Ref != int(iV0Vec))
+                    if (!(strangeTrack.mPartType == o2::dataformats::kStrkV0) || v0Ref != int(iV0Vec))
                     {
                         continue;
                     }
@@ -372,8 +373,8 @@ void V0TrackTreeBuilder(std::string path, std::string outSuffix = "")
                     auto &sTrack = strangeTrack.mMother;
                     isTrackedV0 = true;
                     isDuplicated = cloneCounter > 0;
-                    trackedPt = sqrt(strangeTrack.decayMom[0] * strangeTrack.decayMom[0] + strangeTrack.decayMom[1] * strangeTrack.decayMom[1]);
-                    trackedR2 = strangeTrack.decayVtx[0] * strangeTrack.decayVtx[0] + strangeTrack.decayVtx[1] * strangeTrack.decayVtx[1];
+                    trackedPt = sqrt(strangeTrack.mDecayMom[0] * strangeTrack.mDecayMom[0] + strangeTrack.mDecayMom[1] * strangeTrack.mDecayMom[1]);
+                    trackedR2 = strangeTrack.mDecayVtx[0] * strangeTrack.mDecayVtx[0] + strangeTrack.mDecayVtx[1] * strangeTrack.mDecayVtx[1];
 
                     if (itsRef == int(itsIdx) && v0Ref == int(iV0Vec))
                     {

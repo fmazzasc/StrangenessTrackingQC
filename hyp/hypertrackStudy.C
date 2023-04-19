@@ -26,8 +26,7 @@
 #include "TTree.h"
 #include "TLegend.h"
 #include "CommonDataFormat/RangeReference.h"
-#include "DetectorsVertexing/DCAFitterN.h"
-#include "StrangenessTracking/StrangenessTracker.h"
+#include "ReconstructionDataFormats/StrangeTrack.h"
 
 #endif
 
@@ -39,7 +38,7 @@ using namespace o2::itsmft;
 using CompClusterExt = o2::itsmft::CompClusterExt;
 using ITSCluster = o2::BaseCluster<float>;
 using Vec3 = ROOT::Math::SVector<double, 3>;
-using StrangeTrack = o2::strangeness_tracking::StrangeTrack;
+using StrangeTrack = o2::dataformats::StrangeTrack;
 
 const int motherPDG = 1010010030;
 const int firstDaughterPDG = 1000020030;
@@ -109,6 +108,8 @@ void hypertrackStudy()
         std::string file = ((TSystemFile *)fileObj)->GetName();
         if (file.substr(0, 2) == "tf")
         {
+            if (stoi(file.substr(2)) > 1)
+                continue;
             dirs.push_back(path + file);
             auto innerdir = (TSystemDirectory *)fileObj;
             auto innerfiles = innerdir->GetListOfFiles();
@@ -562,7 +563,6 @@ void hypertrackStudy()
     hRecHypRadiusFakes->SetLineWidth(2.);
     hRecHypRadiusFakes->Draw("pe");
     cv5.Write();
-
 
     hGenHypCt->Write();
     hRecHypRadiusTrackab->Write();
